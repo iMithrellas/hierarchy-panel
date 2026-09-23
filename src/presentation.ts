@@ -3,8 +3,14 @@ import { fieldLabel } from './data';
 import { jiraLink } from './model';
 import type { Issue } from './types';
 
+// readIssues builds rows in field order, so the last field with a given name wins.
+// Presentation and native links must use that same field occurrence.
+function lastField(frame: DataFrame | undefined, name: string) {
+  return frame?.fields.slice().reverse().find((field) => field.name === name);
+}
+
 export function presentField(frame: DataFrame | undefined, issue: Issue, name: string, label = fieldLabel(name)) {
-  const field = frame?.fields.find((field) => field.name === name);
+  const field = lastField(frame, name);
   const value = issue.fields[name];
   const scalar = (value: unknown) => typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
   const display = scalar(value) ? field?.display?.(value) : undefined;
@@ -34,7 +40,7 @@ function safeUrl(value: unknown, allowRelative = false): string | undefined {
 }
 
 export function ticketLinks(frame: DataFrame | undefined, issue: Issue, options: { keyField: string; urlField?: string; baseUrl?: string; fallbackBlocked?: boolean }): { links: LinkModel[]; warning?: string } {
-  const keyField = frame?.fields.find((field) => field.name === options.keyField);
+  const keyField = lastField(frame, options.keyField);
   const nativeLinks = keyField?.getLinks?.({ valueRowIndex: issue.origin.rowIndex }) ?? [];
   if (nativeLinks.length || keyField?.config.links?.length) {
     const links = nativeLinks.flatMap((link) => {

@@ -30,6 +30,31 @@ describe('Grafana field presentation', () => {
     expect(presentField(frame, issue, 'active').text).toBe('false');
   });
 
+  it('uses the final duplicate key and summary fields for parsed values, formatting and native links', () => {
+    const frame = input([row({ summary: 'unused' })]);
+    frame.fields.push(
+      { name: 'issue_key', type: 'string', config: {}, values: ['OLD-1'] } as DataFrame['fields'][number],
+      { name: 'issue_key', type: 'string', config: {}, values: ['NEW-1'] } as DataFrame['fields'][number],
+      { name: 'summary', type: 'string', config: {}, values: ['Old summary'] } as DataFrame['fields'][number],
+      { name: 'summary', type: 'string', config: {}, values: ['Final summary'] } as DataFrame['fields'][number],
+    );
+    const oldSummary = frame.fields.at(-2)!;
+    const finalSummary = frame.fields.at(-1)!;
+    oldSummary.display = vi.fn(() => ({ numeric: 0, text: 'Wrong summary' }));
+    finalSummary.display = vi.fn(() => ({ numeric: 0, text: 'Formatted final summary' }));
+    const finalKey = frame.fields.at(-3)!;
+    finalKey.getLinks = vi.fn(() => [{ href: '/d/final', title: 'Final field link', target: '_self' as const, origin: finalKey }]);
+
+    const issue = readIssues([frame], 10, { fieldMappings: { summary: 'summary' } }).issues[0];
+    expect(issue.key).toBe('NEW-1');
+    expect(issue.summary).toBe('Final summary');
+    expect(presentField(frame, issue, 'summary').text).toBe('Formatted final summary');
+    expect(oldSummary.display).not.toHaveBeenCalled();
+    expect(ticketLinks(frame, issue, { keyField: 'issue_key', baseUrl: 'https://jira.example' }).links)
+      .toMatchObject([{ href: '/d/final', title: 'Final field link' }]);
+    expect(finalKey.getLinks).toHaveBeenCalledWith({ valueRowIndex: 0 });
+  });
+
   it('falls back safely when a configured display or color field contains structured values', () => {
     const frame = input([row({ nested: { toString: null } })]);
     const field = frame.fields.find(({ name }) => name === 'nested')!;
