@@ -15,3 +15,14 @@ export function getQueryErrorEmptyMessage(hasIssues: boolean, hasErrorMessage: b
     ? `${failure} Check the query and datasource; displayed rows may be partial or stale, and exports reflect the data currently shown.`
     : `${failure} Check the query and datasource. Exports reflect the data currently shown.`;
 }
+
+/** Content for the alert shown whenever a query fails, including data.state-only failures. */
+export function getQueryFailureAlertMessages(errors: DataQueryError[], hasRows: boolean): string[] {
+  const messages = errors.length
+    ? errors.map((error) => `Query failed${error.refId ? ` (${error.refId})` : ''}: ${error.message}.`)
+    : ['Query failed without providing an error message.'];
+  messages.push(hasRows
+    ? 'Displayed rows may be partial or stale. Exports reflect the data currently shown.'
+    : 'Exports reflect the data currently shown.');
+  return messages;
+}

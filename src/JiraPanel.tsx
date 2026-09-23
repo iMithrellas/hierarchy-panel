@@ -6,7 +6,7 @@ import { discoverSearchFields, readIssues } from './data';
 import { IssueDetails } from './IssueDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
 import { categoryColor, presentField } from './presentation';
-import { getQueryErrors, getQueryErrorEmptyMessage, isQueryFailure } from './queryErrors';
+import { getQueryErrors, getQueryErrorEmptyMessage, getQueryFailureAlertMessages, isQueryFailure } from './queryErrors';
 import { defaults, type Issue, type JiraOptions, type SearchField } from './types';
 import { ValidationDetails } from './ValidationDetails';
 
@@ -286,9 +286,8 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
       {warnings.length > 0 && <div role="status" className={styles.warning}>
         {warnings.join(' ')}<ValidationDetails diagnostics={parsed.diagnostics} invalid={parsed.invalid} />
       </div>}
-      {hasQueryErrors && <div role="alert" className={styles.warning}>
-        {queryErrors.map((error, index) => <div key={`${error.refId ?? ''}-${index}`}>Query failed{error.refId ? ` (${error.refId})` : ''}: {error.message}.</div>)}
-        Any displayed rows may be partial or stale. Exports reflect the data currently shown.
+      {queryFailed && <div role="alert" className={styles.warning}>
+        {getQueryFailureAlertMessages(queryErrors, selection.rows.length > 0).map((message, index) => <div key={index}>{message}</div>)}
       </div>}
       <div className={styles.axisClip}>
         <div className={styles.axis} style={{ width: innerWidth, transform: `translateX(${-scroll.left}px)` }}>
