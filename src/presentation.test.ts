@@ -81,4 +81,12 @@ describe('ticket navigation', () => {
     expect(ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', baseUrl: 'https://jira.example/context/' }).links)
       .toMatchObject([{ title: 'Open in Jira', href: 'https://jira.example/context/browse/I-1' }]);
   });
+
+  it('blocks the global fallback for mixed sources while retaining a meaningful warning', () => {
+    const frame = input([row()]);
+    const result = ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', fallbackBlocked: true });
+    expect(result.links).toEqual([]);
+    expect(result.warning).toContain('multiple source namespaces');
+    expect(result.warning).toContain('wrong Jira site');
+  });
 });

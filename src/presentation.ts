@@ -33,7 +33,7 @@ function safeUrl(value: unknown, allowRelative = false): string | undefined {
   } catch { return undefined; }
 }
 
-export function ticketLinks(frame: DataFrame | undefined, issue: Issue, options: { keyField: string; urlField?: string; baseUrl?: string }): { links: LinkModel[]; warning?: string } {
+export function ticketLinks(frame: DataFrame | undefined, issue: Issue, options: { keyField: string; urlField?: string; baseUrl?: string; fallbackBlocked?: boolean }): { links: LinkModel[]; warning?: string } {
   const keyField = frame?.fields.find((field) => field.name === options.keyField);
   const nativeLinks = keyField?.getLinks?.({ valueRowIndex: issue.origin.rowIndex }) ?? [];
   if (nativeLinks.length || keyField?.config.links?.length) {
@@ -48,6 +48,9 @@ export function ticketLinks(frame: DataFrame | undefined, issue: Issue, options:
     const href = safeUrl(issue.fields[field]);
     return href ? { links: [{ href, title: 'Open ticket', target: '_blank', origin: issue }] }
       : { links: [], warning: `Ticket URL field ${field} is missing or invalid. Supply a complete HTTP(S) URL without credentials.` };
+  }
+  if (options.fallbackBlocked) {
+    return { links: [], warning: 'Jira base URL fallback is disabled because results contain multiple source namespaces. Configure per-row ticket URLs or key-field data links to avoid opening tickets on the wrong Jira site.' };
   }
   const href = jiraLink(options.baseUrl ?? '', issue.key);
   return { links: href ? [{ href, title: 'Open in Jira', target: '_blank', origin: issue }] : [] };

@@ -205,7 +205,8 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     parsed.truncated ? `Partial result: limited to ${maxIssues.toLocaleString()} issues. Narrow the query; parents or children may be missing.` : '',
     parsed.invalid ? `${parsed.invalid} invalid row(s) excluded. Check validation details and field mappings.` : '',
     stats.warnings ? `${stats.warnings} missing or cyclic parent relationship(s); affected tickets remain visible.` : '',
-    sourceCount > 1 ? `${sourceCount} source namespaces; relationships are isolated per source. Use per-row URLs or key-field data links when combining Jira sites.` : '',
+    sourceCount > 1 ? `${sourceCount} source namespaces; relationships are isolated per source.` : '',
+    sourceCount > 1 && options.jiraBaseUrl?.trim() ? 'Jira base URL fallback is disabled for multiple source namespaces to prevent links opening on the wrong Jira site. Configure per-row ticket URLs or key-field data links.' : '',
   ].filter(Boolean);
 
   return (
@@ -359,7 +360,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
       {selected && <IssueDetails issue={selected} frame={data.series[selected.origin.frameIndex]} fields={parsed.fieldMappings}
         rollup={rollups.get(selected.id)} warning={tree.nodes.get(selected.id)?.warning} stale={clock - selected.observed > staleMs}
         format={format} duration={duration(selected)} metadataFields={options.metadataFields} urlField={options.issueUrlField}
-        baseUrl={replaceVariables(options.jiraBaseUrl ?? '')} styles={styles}
+         baseUrl={sourceCount === 1 ? replaceVariables(options.jiraBaseUrl ?? '') : ''} fallbackBlocked={sourceCount > 1 && !!options.jiraBaseUrl?.trim()} styles={styles}
         onClose={() => setSelectedID(undefined)}
         onFocus={() => { setRoot(selected.key); setRootSource(selected.source); setSearch(''); setProjects([]); }} />}
     </section>

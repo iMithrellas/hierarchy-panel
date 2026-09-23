@@ -15,13 +15,14 @@ interface Props {
   metadataFields?: string;
   urlField?: string;
   baseUrl: string;
+  fallbackBlocked?: boolean;
   onClose: () => void;
   onFocus: () => void;
   styles: Record<'detail' | 'detailHeader' | 'stale' | 'relationships' | 'actions', string>;
 }
 
-export function IssueDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, onClose, onFocus, styles }: Props) {
-  const links = ticketLinks(frame, issue, { keyField: fields.key, urlField, baseUrl });
+export function IssueDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, fallbackBlocked, onClose, onFocus, styles }: Props) {
+  const links = ticketLinks(frame, issue, { keyField: fields.key, urlField, baseUrl, fallbackBlocked });
   const metadata = Object.keys(selectMetadata(issue, metadataFields)).sort().map((name) => ({ name, ...presentField(frame, issue, name) }));
   const attributes = [
     ['status', 'Status', 'Unknown'], ['type', 'Type', 'Unknown'], ['project', 'Project', ''],
