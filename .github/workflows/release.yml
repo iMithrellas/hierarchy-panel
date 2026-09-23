@@ -28,14 +28,8 @@ jobs:
         run: |
           if [ -n "$POLICY_TOKEN" ]; then
             echo 'enabled=true' >> "$GITHUB_OUTPUT"
-            echo 'draft=false' >> "$GITHUB_OUTPUT"
-            echo 'prerelease=false' >> "$GITHUB_OUTPUT"
-            echo 'latest=true' >> "$GITHUB_OUTPUT"
           else
             echo 'enabled=false' >> "$GITHUB_OUTPUT"
-            echo 'draft=false' >> "$GITHUB_OUTPUT"
-            echo 'prerelease=true' >> "$GITHUB_OUTPUT"
-            echo 'latest=false' >> "$GITHUB_OUTPUT"
           fi
         env:
           POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
@@ -63,11 +57,11 @@ jobs:
           subject-path: ${{ steps.package.outputs.archive }}
       - uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4
         with:
-          # Unsigned builds are public prereleases for Grafana's first review;
-          # signing reruns upgrade this same tag to a stable release.
-          draft: ${{ steps.signing.outputs.draft }}
-          prerelease: ${{ steps.signing.outputs.prerelease }}
-          make_latest: ${{ steps.signing.outputs.latest }}
+          # Keep every upload (including signed asset replacement) non-stable until
+          # the new public assets have been downloaded and compared below.
+          draft: false
+          prerelease: true
+          make_latest: false
           overwrite_files: true
           generate_release_notes: true
           files: |
@@ -75,6 +69,24 @@ jobs:
             ${{ steps.package.outputs.archive-sha1sum }}
           body: |
             This release contains the plugin archive and SHA1 checksum.
-            Unsigned builds are prereleases for Grafana's initial review. After approval,
-            configure the GRAFANA_ACCESS_POLICY_TOKEN secret and rerun this workflow for
-            this tag. That run must pass signed MANIFEST validation before becoming stable.
+            This prerelease remains non-stable until signed assets have been uploaded and
+            verified as publicly downloadable.
+      - name: Verify publicly served signed release assets
+        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        id: public-assets
+        run: |
+          RELEASE_ID=$(python3 .github/scripts/verify_public_release_assets.py \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$PLUGIN_ARCHIVE" "$PLUGIN_SHA1")
+          echo "release-id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          PLUGIN_ARCHIVE: ${{ steps.package.outputs.archive }}
+          PLUGIN_SHA1: ${{ steps.package.outputs.archive-sha1sum }}
+      - name: Promote verified signed release to stable
+        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_ID: ${{ steps.public-assets.outputs.release-id }}
+        run: gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F prerelease=false -f make_latest=true

@@ -385,9 +385,11 @@ and the same URL with `.sha1` appended when submitting to Grafana. After Grafana
 approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret
 and rerun the workflow for the same tag. The run signs the plugin, requires the
 archive to contain a PGP clear-signed `MANIFEST.txt` with a complete signature
-block, and validates the archive before upgrading that same release to stable.
-Each rerun replaces same-named assets, so the public ZIP and SHA1 are replaced
-together with the signed build. Unsigned runs remain prereleases and cannot
+block, and validates the archive. The signed ZIP and SHA1 replace the existing
+assets while the GitHub release remains a prerelease and not-latest. Before
+promotion, the workflow anonymously downloads both public assets and verifies
+they byte-match the signed local build and checksum. Only then does a separate
+step mark the release stable/latest. Unsigned runs remain prereleases and cannot
 become stable/latest. Every run checks the archived plugin version against the
 tag. The workflow generates a GitHub build provenance attestation for each
 archive. The package action is referenced by
@@ -396,6 +398,12 @@ immutable commit; this avoids the build-plugin wrapper's nested mutable
 version-pinned Grafana validator check on the archive. The upstream packaging
 action also runs its own validator via `@latest`. The policy token is passed as
 a masked action input/environment value and is never printed by the workflow.
+If asset replacement or public verification fails, the release remains a
+prerelease and is not promoted. Keep it that way; rerun the workflow for the same
+tag with the signing secret configured to replace and re-verify both assets. If
+promotion fails after verification, the checked assets remain on the prerelease;
+rerunning the signed workflow repeats verification and promotion. Do not manually
+mark a prerelease stable until its ZIP and SHA1 have been checked.
 
 For a local release build:
 
