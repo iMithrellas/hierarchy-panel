@@ -377,10 +377,20 @@ this repository does not include a signing key or a signed release.
 ## Public Releases
 
 Public release builds use the exact version in `package.json` rather than the
-development cache suffix. The release workflow runs on tags matching `v*`,
-creates the plugin archive, and publishes a draft GitHub release. Set the
-`GRAFANA_ACCESS_POLICY_TOKEN` repository secret after Grafana approves the public
-plugin so the workflow can sign releases and generate provenance attestations.
+development cache suffix. The release workflow runs on tags matching `v*` and
+creates a draft GitHub release containing the plugin archive and SHA1 checksum.
+The first run may be unsigned so its archive can be submitted to Grafana for
+review. After Grafana approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN`
+repository secret and rerun the workflow for the same tag. That run signs the
+plugin and fails unless the packaged `MANIFEST.txt` contains a signature; it also
+validates the archive before creating/updating the draft. Publish only the
+validated signed draft after approval. The workflow generates a GitHub build
+provenance attestation for each archive. The package action is referenced by
+immutable commit; this avoids the build-plugin wrapper's nested mutable
+`package-plugin@main` reference. The workflow runs an additional explicit
+version-pinned Grafana validator check on the archive. The upstream packaging
+action also runs its own validator via `@latest`. The policy token is passed as
+a masked action input/environment value and is never printed by the workflow.
 
 For a local release build:
 
