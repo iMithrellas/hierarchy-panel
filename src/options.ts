@@ -3,6 +3,7 @@ import { defaults, defaultFieldMappings, type CollapseMode, type JiraOptions } f
 const stringOptions = [
   'rootKey', 'jiraBaseUrl', 'searchableFields', 'sourceFields', 'metadataFields', 'issueUrlField', 'colorField',
 ] as const;
+const normalizedByInput = new WeakMap<object, JiraOptions>();
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) { return false; }
@@ -12,6 +13,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /** Grafana can supply persisted options from older or manually edited panel JSON. */
 export function normalizeOptions(value: unknown): JiraOptions {
+  if (value !== null && typeof value === 'object') {
+    const cached = normalizedByInput.get(value);
+    if (cached) { return cached; }
+  }
   const raw = isPlainObject(value) ? value : {};
   const strings = Object.fromEntries(stringOptions.map((key) => [key,
     typeof raw[key] === 'string' ? raw[key] : defaults[key],
@@ -22,7 +27,7 @@ export function normalizeOptions(value: unknown): JiraOptions {
   ) as JiraOptions['fieldMappings'];
   const collapseModes: CollapseMode[] = ['parent-or-descendants', 'parent', 'subtree'];
 
-  return {
+  const normalized: JiraOptions = {
     ...defaults,
     ...strings,
     fieldMappings,
@@ -33,4 +38,6 @@ export function normalizeOptions(value: unknown): JiraOptions {
     labelWidth: typeof raw.labelWidth === 'number' ? raw.labelWidth : defaults.labelWidth,
     collapseMode: collapseModes.includes(raw.collapseMode as CollapseMode) ? raw.collapseMode as CollapseMode : defaults.collapseMode,
   };
+  if (value !== null && typeof value === 'object') { normalizedByInput.set(value, normalized); }
+  return normalized;
 }

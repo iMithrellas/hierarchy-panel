@@ -24,4 +24,15 @@ describe('normalizeOptions', () => {
       fieldMappings: {}, collapseMode: defaults.collapseMode,
     });
   });
+
+  it('reuses normalized mappings for stable options identity but refreshes changed options', () => {
+    const original = { fieldMappings: { key: 'old_key' } };
+    const first = normalizeOptions(original);
+    expect(normalizeOptions(original)).toBe(first);
+    expect(normalizeOptions(original).fieldMappings).toBe(first.fieldMappings);
+
+    const changed = normalizeOptions({ ...original, fieldMappings: { key: 'new_key' } });
+    expect(changed.fieldMappings).toEqual({ key: 'new_key' });
+    expect(changed.fieldMappings).not.toBe(first.fieldMappings);
+  });
 });
