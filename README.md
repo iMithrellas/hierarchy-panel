@@ -382,8 +382,9 @@ creates a draft GitHub release containing the plugin archive and SHA1 checksum.
 The first run may be unsigned so its archive can be submitted to Grafana for
 review. After Grafana approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN`
 repository secret and rerun the workflow for the same tag. That run signs the
-plugin and fails unless the packaged `MANIFEST.txt` contains a signature; it also
-validates the archive before creating/updating the draft. Publish only the
+plugin and fails unless the archive contains a PGP clear-signed `MANIFEST.txt`
+with a complete signature block. Every run checks the archived plugin version
+against the tag before creating/updating the draft. Publish only the
 validated signed draft after approval. The workflow generates a GitHub build
 provenance attestation for each archive. The package action is referenced by
 immutable commit; this avoids the build-plugin wrapper's nested mutable
