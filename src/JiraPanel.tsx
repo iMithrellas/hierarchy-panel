@@ -6,6 +6,7 @@ import { discoverSearchFields, readIssues } from './data';
 import { IssueDetails } from './IssueDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
 import { categoryColor, presentField } from './presentation';
+import { normalizeOptions } from './options';
 import { getQueryErrors, getQueryErrorEmptyMessage, getQueryFailureAlertMessages, isQueryFailure } from './queryErrors';
 import { defaults, type Issue, type JiraOptions, type SearchField } from './types';
 import { ValidationDetails } from './ValidationDetails';
@@ -14,6 +15,7 @@ const clamp = (value: number | undefined, fallback: number, min: number, max: nu
   Number.isFinite(value) ? Math.max(min, Math.min(max, Number(value))) : fallback;
 
 export function JiraPanel({ data, options, width, height, timeZone, replaceVariables }: PanelProps<JiraOptions>) {
+  options = normalizeOptions(options);
   const theme = useTheme2();
   const styles = useStyles2(getStyles);
   const configuredRoot = replaceVariables(options.rootKey ?? defaults.rootKey);
