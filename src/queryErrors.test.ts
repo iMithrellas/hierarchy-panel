@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getQueryErrors, getQueryErrorEmptyMessage } from './queryErrors';
+import { getQueryErrors, getQueryErrorEmptyMessage, isQueryFailure } from './queryErrors';
 
 describe('getQueryErrors', () => {
   it('uses every modern error and does not duplicate the legacy fallback', () => {
@@ -19,9 +19,15 @@ describe('getQueryErrors', () => {
   });
 
   it('distinguishes empty results from partial results while cautioning about exports', () => {
-    expect(getQueryErrorEmptyMessage(false)).toContain('exports reflect the data currently shown');
-    const partial = getQueryErrorEmptyMessage(true);
+    expect(getQueryErrorEmptyMessage(false, true)).toContain('Exports reflect the data currently shown');
+    const partial = getQueryErrorEmptyMessage(true, true);
     expect(partial).toContain('partial or stale');
-    expect(partial).toContain('exports');
+    expect(partial).toContain('exports reflect the data currently shown');
+  });
+
+  it('explains an Error state when Grafana provides no error details', () => {
+    expect(getQueryErrors(undefined, undefined)).toEqual([]);
+    expect(isQueryFailure('Error', false)).toBe(true);
+    expect(getQueryErrorEmptyMessage(false, false)).toContain('query failed without providing an error message');
   });
 });
