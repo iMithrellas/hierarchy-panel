@@ -7,6 +7,7 @@ import { IssueDetails } from './IssueDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
 import { categoryColor, presentField } from './presentation';
 import { normalizeOptions } from './options';
+import { resetScrollTop } from './panelState';
 import { getQueryErrors, getQueryErrorEmptyMessage, getQueryFailureAlertMessages, isQueryFailure } from './queryErrors';
 import { defaults, type Issue, type JiraOptions, type SearchField } from './types';
 import { ValidationDetails } from './ValidationDetails';
@@ -90,7 +91,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   }, [root, rootSource, initialDepth]);
   useEffect(() => {
     if (viewport.current) { viewport.current.scrollTop = 0; }
-    setScroll((previous) => ({ ...previous, top: 0 }));
+    setScroll(resetScrollTop);
     setMatchCursor(0);
   }, [root, rootSource, deferredSearch, projects, activeSearchField, searchFieldOptions]);
   useEffect(() => {
