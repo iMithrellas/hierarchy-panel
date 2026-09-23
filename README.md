@@ -40,18 +40,9 @@ docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml 
 npm run seed
 ```
 
-Both npm and pnpm work without Git or SSH configuration. The package override maps
+Use npm (`npm ci`) for installation and package scripts. The package override maps
 Grafana UI's transitive Git-only `react-data-grid` dependency to registry release
 `7.0.0-beta.61`, the current registry line compatible with the Grafana UI dependency.
-For pnpm, this override is in `pnpm-workspace.yaml` because pnpm 11 no longer reads
-the legacy `pnpm` package.json field.
-Use either:
-
-```sh
-npm ci
-# or
-pnpm install --frozen-lockfile
-```
 
 The build uses Grafana/React as external runtime modules, not bundled copies of
 these SDK dependencies. Do not remove the `react-data-grid` override unless the
@@ -354,7 +345,6 @@ npm run build
 npm test
 npx playwright install chromium
 npm run test:e2e
-# Equivalent pnpm commands: pnpm build, pnpm test, pnpm exec playwright install chromium, pnpm test:e2e
 ```
 
 Browser tests require the running, seeded development stack. They exercise the
