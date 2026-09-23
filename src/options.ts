@@ -11,13 +11,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-/** Grafana can supply persisted options from older or manually edited panel JSON. */
-export function normalizeOptions(value: unknown): JiraOptions {
-  if (value !== null && typeof value === 'object') {
-    const cached = normalizedByInput.get(value);
-    if (cached) { return cached; }
-  }
-  const raw = isPlainObject(value) ? value : {};
+function buildNormalizedOptions(raw: Record<string, unknown>): JiraOptions {
   const strings = Object.fromEntries(stringOptions.map((key) => [key,
     typeof raw[key] === 'string' ? raw[key] : defaults[key],
   ])) as Pick<JiraOptions, typeof stringOptions[number]>;
@@ -38,6 +32,17 @@ export function normalizeOptions(value: unknown): JiraOptions {
     labelWidth: typeof raw.labelWidth === 'number' ? raw.labelWidth : defaults.labelWidth,
     collapseMode: collapseModes.includes(raw.collapseMode as CollapseMode) ? raw.collapseMode as CollapseMode : defaults.collapseMode,
   };
-  if (value !== null && typeof value === 'object') { normalizedByInput.set(value, normalized); }
+  return normalized;
+}
+
+const fallbackOptions = buildNormalizedOptions({});
+
+/** Grafana treats panel options as immutable and supplies a new object when an option changes. */
+export function normalizeOptions(value: unknown): JiraOptions {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) { return fallbackOptions; }
+  const cached = normalizedByInput.get(value);
+  if (cached) { return cached; }
+  const normalized = buildNormalizedOptions(isPlainObject(value) ? value : {});
+  normalizedByInput.set(value, normalized);
   return normalized;
 }

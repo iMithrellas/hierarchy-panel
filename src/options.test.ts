@@ -7,6 +7,10 @@ describe('normalizeOptions', () => {
     expect(normalizeOptions(value)).toEqual(defaults);
   });
 
+  it.each([null, 4, 'options', [], true])('reuses fallback mappings for non-object options: %s', (value) => {
+    expect(normalizeOptions(value).fieldMappings).toBe(normalizeOptions(value).fieldMappings);
+  });
+
   it('keeps valid values while discarding invalid provisioned values', () => {
     expect(normalizeOptions({
       rootKey: 'PROJ-1', jiraBaseUrl: 5, initialDepth: 4, rowHeight: 100, maxIssues: 20,
