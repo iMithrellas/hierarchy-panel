@@ -391,7 +391,10 @@ promotion, the workflow anonymously downloads both public assets and verifies
 they byte-match the signed local build and checksum. Only then does a separate
 step mark the release stable/latest. Unsigned runs remain prereleases and cannot
 become stable/latest. Every run checks the archived plugin version against the
-tag. The workflow generates a GitHub build provenance attestation for each
+tag. Before packaging, an unsigned run checks the tag's existing GitHub release
+using the workflow token and refuses to proceed if a published stable release
+already exists; only a definitive 404 is treated as a first submission. The
+workflow generates a GitHub build provenance attestation for each
 archive. The package action is referenced by
 immutable commit; this avoids the build-plugin wrapper's nested mutable
 `package-plugin@main` reference. The workflow runs an additional explicit
@@ -402,8 +405,10 @@ If asset replacement or public verification fails, the release remains a
 prerelease and is not promoted. Keep it that way; rerun the workflow for the same
 tag with the signing secret configured to replace and re-verify both assets. If
 promotion fails after verification, the checked assets remain on the prerelease;
-rerunning the signed workflow repeats verification and promotion. Do not manually
-mark a prerelease stable until its ZIP and SHA1 have been checked.
+rerunning the signed workflow repeats verification and promotion. An unsigned
+rerun is intentionally blocked once a stable release exists; restore/configure
+the signing secret and use a signed rerun for any repair. Do not manually mark a
+prerelease stable until its ZIP and SHA1 have been checked.
 
 For a local release build:
 

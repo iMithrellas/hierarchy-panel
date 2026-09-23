@@ -33,6 +33,13 @@ jobs:
           fi
         env:
           POLICY_TOKEN: ${{ secrets.GRAFANA_ACCESS_POLICY_TOKEN }}
+      - name: Refuse unsigned rerun of a stable release
+        if: ${{ steps.signing.outputs.enabled != 'true' }}
+        run: python3 .github/scripts/check_unsigned_release_preflight.py "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
       # Use the packaging action directly at an immutable revision. The build-plugin
       # wrapper's package-plugin@main dependency is mutable and cannot be pinned by
       # pinning the wrapper itself.
