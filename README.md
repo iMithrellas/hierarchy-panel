@@ -378,15 +378,19 @@ this repository does not include a signing key or a signed release.
 
 Public release builds use the exact version in `package.json` rather than the
 development cache suffix. The release workflow runs on tags matching `v*` and
-creates a draft GitHub release containing the plugin archive and SHA1 checksum.
-The first run may be unsigned so its archive can be submitted to Grafana for
-review. After Grafana approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN`
-repository secret and rerun the workflow for the same tag. That run signs the
-plugin and fails unless the archive contains a PGP clear-signed `MANIFEST.txt`
-with a complete signature block. Every run checks the archived plugin version
-against the tag before creating/updating the draft. Publish only the
-validated signed draft after approval. The workflow generates a GitHub build
-provenance attestation for each archive. The package action is referenced by
+creates a public GitHub prerelease with the plugin archive and SHA1 checksum,
+even for the initial unsigned submission. Use the public asset URLs
+`https://github.com/<owner>/<repo>/releases/download/v<version>/<plugin-id>-<version>.zip`
+and the same URL with `.sha1` appended when submitting to Grafana. After Grafana
+approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret
+and rerun the workflow for the same tag. The run signs the plugin, requires the
+archive to contain a PGP clear-signed `MANIFEST.txt` with a complete signature
+block, and validates the archive before upgrading that same release to stable.
+Each rerun replaces same-named assets, so the public ZIP and SHA1 are replaced
+together with the signed build. Unsigned runs remain prereleases and cannot
+become stable/latest. Every run checks the archived plugin version against the
+tag. The workflow generates a GitHub build provenance attestation for each
+archive. The package action is referenced by
 immutable commit; this avoids the build-plugin wrapper's nested mutable
 `package-plugin@main` reference. The workflow runs an additional explicit
 version-pinned Grafana validator check on the archive. The upstream packaging
