@@ -6,6 +6,7 @@ import { discoverSearchFields, readIssues } from './data';
 import { IssueDetails } from './IssueDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
 import { categoryColor, presentField } from './presentation';
+import { getQueryErrors, getQueryErrorEmptyMessage } from './queryErrors';
 import { defaults, type Issue, type JiraOptions, type SearchField } from './types';
 import { ValidationDetails } from './ValidationDetails';
 
@@ -208,6 +209,10 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     sourceCount > 1 ? `${sourceCount} source namespaces; relationships are isolated per source.` : '',
     sourceCount > 1 && options.jiraBaseUrl?.trim() ? 'Jira base URL fallback is disabled for multiple source namespaces to prevent links opening on the wrong Jira site. Configure per-row ticket URLs or key-field data links.' : '',
   ].filter(Boolean);
+  // Grafana 10+ uses errors; prefer it whenever populated so the deprecated
+  // singular field cannot produce a duplicate alert for the same query error.
+  const queryErrors = getQueryErrors(data.errors, data.error);
+  const hasQueryErrors = queryErrors.length > 0;
 
   return (
     <section className={styles.panel} style={{ width, height }} aria-label="Jira hierarchy timeline" onKeyDown={(event) => {
@@ -280,7 +285,10 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
       {warnings.length > 0 && <div role="status" className={styles.warning}>
         {warnings.join(' ')}<ValidationDetails diagnostics={parsed.diagnostics} invalid={parsed.invalid} />
       </div>}
-      {data.error && <div role="alert" className={styles.warning}>Query failed: {data.error.message}. Any displayed rows may be from the previous result.</div>}
+      {hasQueryErrors && <div role="alert" className={styles.warning}>
+        {queryErrors.map((error, index) => <div key={`${error.refId ?? ''}-${index}`}>Query failed{error.refId ? ` (${error.refId})` : ''}: {error.message}.</div>)}
+        Any displayed rows may be partial or stale. Exports reflect the data currently shown.
+      </div>}
       <div className={styles.axisClip}>
         <div className={styles.axis} style={{ width: innerWidth, transform: `translateX(${-scroll.left}px)` }}>
           <div style={{ width: labelWidth }} className={styles.axisTitle}>TICKET / SUMMARY</div>
@@ -347,8 +355,9 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
           </svg>}
         </div>
         {!selection.rows.length && <div className={styles.empty}>
-          <strong>{data.state === 'Loading' ? 'Loading Jira tickets...' : 'No matching tickets'}</strong>
-          <p>{!parsed.issues.length ? 'Return complete issue observations matching the query contract as a table or logs frame. Check the query range and required fields.'
+          <strong>{data.state === 'Loading' ? 'Loading Jira tickets...' : hasQueryErrors ? 'Jira query error' : 'No matching tickets'}</strong>
+          <p>{hasQueryErrors ? getQueryErrorEmptyMessage(parsed.issues.length > 0)
+            : !parsed.issues.length ? 'Return complete issue observations matching the query contract as a table or logs frame. Check the query range and required fields.'
             : root && !selection.scopedCount ? `Parent ${root} is not in the result. Clear Parent to browse all trees; include the parent and every child project in the query.`
               : 'Clear search or project filters to see tickets.'}</p>
         </div>}
