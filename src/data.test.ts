@@ -116,6 +116,42 @@ describe('numeric issue ordering', () => {
   });
 });
 
+describe('explicit-zone Jira timestamps', () => {
+  it.each(['+0000', '+0530', '-0430', '+00:00', '+05:30', '-04:30'])('accepts %s offsets for creation, observation and resolution', (offset) => {
+    const created_at = `2026-09-01T10:00:00.000${offset}`;
+    const resolved_at = `2026-09-01T11:00:00.000${offset}`;
+    const sync_ts = `2026-09-01T12:00:00.000${offset}`;
+    const result = readIssues([table([row('OPS-1', { created_at, resolved_at, sync_ts, is_resolved: true })])], 10);
+    const colonOffset = offset.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+    expect(result.invalid).toBe(0);
+    expect(result.issues[0]).toMatchObject({
+      start: Date.parse(`2026-09-01T10:00:00.000${colonOffset}`),
+      end: Date.parse(`2026-09-01T11:00:00.000${colonOffset}`),
+      observed: Date.parse(`2026-09-01T12:00:00.000${colonOffset}`),
+    });
+  });
+
+  it.each(['+2400', '-0060', '+2360', '+0:00', '+000', '+00000', '+00:000', '', '+0000Z'])('rejects malformed or absent offsets %j', (offset) => {
+    for (const field of ['created_at', 'sync_ts', 'resolved_at']) {
+      const result = readIssues([table([row('OPS-1', { created_at: 0, resolved_at: 50, is_resolved: true,
+        [field]: `2026-09-01T10:00:00.000${offset}` })])], 10);
+      expect(result.issues).toHaveLength(0);
+      expect(result.diagnostics[0].field).toBe(field);
+    }
+  });
+
+  it('preserves calendar and chronology validation for compact offsets', () => {
+    const result = readIssues([table([
+      row('OPS-1', { sync_ts: '2026-02-30T10:00:00.000+0000' }),
+      row('OPS-2', { created_at: '2026-09-01T10:00:00.000-0400', sync_ts: '2026-09-01T12:00:00.000+0000' }),
+      row('OPS-3', { created_at: 0, is_resolved: true, resolved_at: '2026-09-01T10:00:00.000-0400', sync_ts: '2026-09-01T12:00:00.000+0000' }),
+      row('OPS-4', { sync_ts: '2026-09-01T25:00:00.000+0000' }),
+    ])], 10);
+    expect(result.invalid).toBe(4);
+    expect(result.issues).toHaveLength(0);
+  });
+});
+
 describe('custom metadata', () => {
   it('preserves sparse scalar values and arrays, including names that collide with export columns', () => {
     const result = readIssues([table([

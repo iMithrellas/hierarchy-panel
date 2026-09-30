@@ -100,9 +100,9 @@ select different incoming names without rewriting the query.
 
 At least one observation timestamp is required. Use numeric epoch milliseconds,
 `YYYY-MM-DD` dates (UTC midnight), or ISO timestamps with seconds and an explicit
-timezone (`Z` or an offset). Numeric strings and timezone-free date-times are
-rejected. A supplied empty or invalid timestamp is rejected rather than replaced
-by another time field. Dates must be representable and satisfy
+timezone (`Z`, `+00:00`, or Jira-style `+0000` offsets). Numeric strings and
+timezone-free date-times are rejected. A supplied empty or invalid timestamp is
+rejected rather than replaced by another time field. Dates must be representable and satisfy
 `created_at <= end <= observation time`, where end is `resolved_at` for resolved
 tickets and the observation time otherwise.
 

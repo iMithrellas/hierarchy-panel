@@ -70,10 +70,11 @@ export function selectMetadata(issue: Issue, configured = ''): Record<string, Me
 
 function timestamp(value: unknown): number {
   if (typeof value === 'number') { return new Date(value).getTime(); }
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value)) { return NaN; }
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}))?$/.test(value)) { return NaN; }
   const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value.slice(0, 10)) { return NaN; }
-  return Date.parse(value);
+  const normalized = value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  return Date.parse(normalized);
 }
 
 function object(value: unknown): Record<string, unknown> {
