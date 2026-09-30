@@ -1,33 +1,37 @@
-# Jira Hierarchy Panel
+# Hierarchy Timeline
 
-A standalone Grafana panel for exploring **actual Jira parent trees alongside
-observed ticket lifetimes**. Plugin ID: `imithrellas-jira-panel`. Built and tested against
+A datasource-agnostic Grafana panel for exploring **record hierarchies, observed
+lifetimes and relationships** from compatible Grafana DataFrames. Plugin ID:
+`imithrellas-hierarchy-panel`. Built and tested against
 Grafana **13.0.1**, using public plugin APIs, React 18 and TypeScript. The repository's
-development stack is isolated from other Grafana instances.
+development stack is isolated from other Grafana instances. Jira observations in
+VictoriaLogs are an included example, not a required datasource or schema. This
+panel requires structured observations matching the contract below; it does not
+turn arbitrary unstructured data into a hierarchy or act as a planned-date Gantt.
 
 ## Features
 
-- Parent-subtree focus or all-project browsing, including cross-project descendants.
+- Parent-subtree focus or all-group browsing, including cross-group descendants.
 - Expand/collapse and virtualized fixed-height rows. Only visible rows plus overscan are mounted.
-- Search by key, summary, assignee, status, issue type, or discovered custom fields such as company, with an `All fields` default and a field selector. Multi-project filters retain ancestor context.
-- Creation-to-resolution bars for resolved tickets; creation-to-last-observation bars for open tickets.
+- Search by key, summary, assignee, status, type, or discovered custom fields such as company, with an `All fields` default and a field selector. Group filters retain ancestor context.
+- Creation-to-resolution bars for resolved records; creation-to-last-observation bars for open records.
 - Descendant rollups on parent rows: child count, resolved child count, and stale child count.
-- Colored relationship lines anchored to issue bars, with explicit directed or undirected semantics and hover labels for Jira and custom link types.
+- Colored relationship lines anchored to record bars, with explicit directed or undirected semantics and hover labels for relationship types.
 - A `Hide arrows` / `Show arrows` control for decluttering the timeline without changing relationship data.
-- Status-category or Grafana field colors, stale-observation markers, custom-field details, and per-row ticket URLs or Grafana data links.
+- Status-category or Grafana field colors, stale-observation markers, custom-field details, and per-row record URLs or Grafana data links.
 - Configurable input fields and source identity, with Jira defaults for existing queries.
-- Local zoom, pan and fit-to-tickets. Collapsing rows does not change the fitted time extent.
+- Local zoom, pan and fit-to-records. Collapsing rows does not change the fitted time extent.
 - Large-tree controls: expand through a selected depth, collapse resolved branches, and navigate search matches.
 - CSV and JSON export of the complete current filtered tree, including collapsed descendants, rollups, and custom metadata.
 - Missing parents remain visible as roots. Cyclic relationships are broken with a warning.
 - Light/dark Grafana themes, keyboard-operable controls, and horizontal scrolling on narrow screens.
 
 The timeline does **not** represent planned dates, status transitions, dependencies,
-or Jira changes that happened after the last observation. Parent bars show the
-parent issue's own lifetime, not a synthetic roll-up of its children.
+or state changes that happened after the last observation. Parent bars show the
+parent record's own lifetime, not a synthetic roll-up of its children.
 Relationship arrows are drawn when both endpoints are present and visible in the
-selected hierarchy. Links to tickets outside the query or collapsed branches are
-listed only from the selected ticket's details until those endpoints are visible.
+selected hierarchy. Links to records outside the query or collapsed branches are
+listed only from the selected record's details until those endpoints are visible.
 
 ## Run The Playground
 
@@ -36,7 +40,7 @@ Requirements: Node 22+, npm, Docker with Compose. Run these commands from the re
 ```sh
 npm ci
 npm run build
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml up -d --wait
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml up -d --wait
 npm run seed
 ```
 
@@ -48,17 +52,17 @@ The build uses Grafana/React as external runtime modules, not bundled copies of
 these SDK dependencies. Do not remove the `react-data-grid` override unless the
 Grafana SDK releases a registry-resolvable dependency.
 
-Open [Jira Hierarchy - Development](http://127.0.0.1:3300/d/jira-hierarchy-dev), in
+Open [Hierarchy Timeline - Development](http://127.0.0.1:3300/d/hierarchy-timeline-dev), in
 the **Operations** folder. Grafana is loopback-only on port 3300; VictoriaLogs is
 loopback-only on 19428. These services have separate storage and never load the
 repository `.env`, contact Jira, or connect to the existing Grafana instance.
 
-The fixture contains 3,832 synthetic tickets. Enter `PM-100` for a small cross-project
-tree, `PM-200` for maintenance work, or `PM-300` for 3,757 tickets. Clear Parent to
+The fixture contains 3,832 synthetic records. Enter `PM-100` for a small cross-project
+tree, `PM-200` for maintenance work, or `PM-300` for 3,757 records. Clear Parent to
 see all trees, including missing-parent examples. No real Jira data is seeded.
 
 Anonymous viewing is enabled. For editing, the deliberately development-only
-login is `jira-panel-dev` / `jira-panel-development-only`. **Do not expose this
+login is `hierarchy-timeline-dev` / `hierarchy-timeline-development-only`. **Do not expose this
 stack through a public interface, proxy or tunnel.** See [development notes](https://github.com/iMithrellas/jira-panel/blob/main/dev/README.md)
 for ports, fixture details, and stop/reset commands.
 
@@ -72,28 +76,28 @@ Build `dist/` before starting Compose, so Docker does not create it as root.
 
 ## Query Contract
 
-Provide one or more observations for each Jira issue. The panel selects the newest
-observation for each `issue_key` within a source namespace, so every observation
+Provide one or more observations for each record. The panel selects the newest
+observation for each mapped key (`issue_key` by default) within a source namespace, so every observation
 must be a complete current-state record rather than a partial update. How these
 records are collected and delivered to Grafana is outside the scope of this plugin.
 
-The panel accepts flat table DataFrames from any datasource, or logs frames with a
+The panel accepts compatible flat table DataFrames from any datasource, or logs frames with a
 per-row `labels` object or JSON string. Direct fields take precedence over fields
 inside `labels`. The development dashboard uses VictoriaLogs as an example and
 passes its native frames directly; no Extract fields transformation is required.
-The following names are the defaults; use **Field mappings** in panel options to
+The following Jira-compatible names are defaults, not mandatory Jira fields; use **Field mappings** in panel options to
 select different incoming names without rewriting the query.
 
 | Field | Meaning |
 | --- | --- |
-| `issue_key` | Required ticket identity |
+| `issue_key` | Required record identity |
 | `app`, `instance`, `environment` | Optional source namespace; retain through queries and transformations when used |
 | `created_at` | Required ISO 8601 creation time, or numeric epoch milliseconds |
 | `sync_ts` | Observation time; falls back to `_time` or Grafana's `Time` field when absent or null |
 | `is_resolved` | Required boolean or string `"true"` / `"false"`; not inferred from status |
 | `resolved_at` | Required valid timestamp if resolved; ignored if open/reopened |
-| `parent_key` | Actual Jira parent; absent or empty for roots |
-| `project_key`, `summary`, `issue_type` | Project filtering and display metadata |
+| `parent_key` | Actual parent record key; absent or empty for roots |
+| `project_key`, `summary`, `issue_type` | Group filtering and display metadata |
 | `status`, `status_category` | Label and color (`new`, `indeterminate`, `done`) |
 | `assignee`, `priority` | Search/detail metadata |
 | `issue_links` | Optional normalized relationships: `target_key`, canonical `type`, current-side `display`, and `direction` |
@@ -104,7 +108,7 @@ timezone (`Z`, `+00:00`, or Jira-style `+0000` offsets). Numeric strings and
 timezone-free date-times are rejected. A supplied empty or invalid timestamp is
 rejected rather than replaced by another time field. Dates must be representable and satisfy
 `created_at <= end <= observation time`, where end is `resolved_at` for resolved
-tickets and the observation time otherwise.
+records and the observation time otherwise.
 
 Identity, namespace and the listed display fields must be strings when supplied;
 optional fields can be absent or null. `issue_links` accepts an array or
@@ -113,11 +117,11 @@ JSON-encoded array of links with nonempty string `target_key` and `type`,
 Absent, null or empty-string links mean no relationships. Malformed contract
 fields or links exclude the row with a visible warning. Rows with valid identities,
 namespaces and observation times are deduplicated before full validation, so a
-malformed newest row does not silently restore stale ticket state. Equal
+malformed newest row does not silently restore stale record state. Equal
 observation timestamps retain the first row received. Additional custom fields
 remain available according to the [search-field rules](#custom-search-fields).
 Expand **Validation details** in the warning area to see the query refId, frame,
-one-based row number, issue key when available, offending incoming field, and reason.
+one-based row number, record key when available, offending incoming field, and reason.
 Samples are limited to 20 excluded rows; the total invalid-row count includes all
 excluded rows. Diagnostics refer to the DataFrames after Grafana transformations.
 
@@ -133,11 +137,11 @@ A minimal table row needs no exporter metadata or source namespace:
 ```
 
 Without namespace fields, all rows share one source. Supply them when combining
-Jira sites that might have identical ticket keys.
+sources or tenants that might have identical record keys.
 
 ### Field And Source Mapping
 
-**Field mappings** provides selectors for the key, parent, project, summary, type,
+**Field mappings** provides selectors for the key, parent, group (`project` mapping), summary, type,
 status, status category, assignee, priority, creation time, observation time,
 resolution time, resolution flag, and relationship array. Selectors list incoming
 table fields and keys discovered inside `labels`; names can also be entered manually.
@@ -145,40 +149,51 @@ Names are case-sensitive and refer to incoming names, not Grafana display-name
 overrides. A blank mapping restores its Jira default. Nested objects must be
 flattened into columns or labels keys before mapping.
 
-For example, this panel configuration accepts a different issue schema:
+For example, these two generic table rows represent an open parent and a closed
+child. They need no Jira fields, exporter, or integration:
+
+```json
+[
+  {"id": "run-1", "group": "batch", "title": "Import run", "started_at": "2026-09-01T10:00:00Z", "observed_at": "2026-09-01T12:00:00Z", "closed": false, "record_url": "https://records.example/runs/run-1"},
+  {"id": "step-1", "parent_id": "run-1", "group": "batch", "title": "Validate input", "started_at": "2026-09-01T10:05:00Z", "observed_at": "2026-09-01T12:00:00Z", "ended_at": "2026-09-01T10:15:00Z", "closed": true, "record_url": "https://records.example/steps/step-1"}
+]
+```
+
+Use these panel options (or configure Grafana data links on `id` instead of
+`issueUrlField`):
 
 ```json
 {
   "fieldMappings": {
     "key": "id",
     "parent": "parent_id",
+    "project": "group",
     "summary": "title",
-    "created": "opened_at",
-    "observed": "captured_at",
-    "resolved": "closed_at",
+    "created": "started_at",
+    "observed": "observed_at",
+    "resolved": "ended_at",
     "isResolved": "closed",
     "links": "relations"
   },
-  "sourceFields": "site_id, tenant",
-  "issueUrlField": "ticket_url"
+  "issueUrlField": "record_url"
 }
 ```
 
 Mappings change names, not value semantics: identities remain strings, timestamps
 follow the timestamp contract, and the resolution flag remains explicit. The
 default `sync_ts` mapping retains the `_time` / `Time` fallback. A custom observation
-mapping such as `captured_at` is authoritative and does not fall back to another
+mapping such as `observed_at` is authoritative and does not fall back to another
 timestamp when absent or invalid.
 
 **Source identity fields** is an ordered, comma-separated list. Blank retains the
 optional `app`, `instance`, and `environment` namespace. If configured, every listed
 field must contain a nonempty string on every row; missing source identity excludes
-the row instead of merging it with another site's tickets. Source values are kept
+the row instead of merging it with another site's records. Source values are kept
 exactly as supplied. Deduplication, parents, and relationships use this same identity.
 
 ### Relationship Direction
 
-Use `outward` for a relationship originating at the current issue, `inward` for
+Use `outward` for a relationship originating at the current record, `inward` for
 its reverse-side representation, and `undirected` when neither endpoint is the
 origin. Reciprocal representations of the same undirected type produce one line
 without an arrowhead. Directed and undirected relationships are distinct.
@@ -192,7 +207,7 @@ Existing `inward` / `outward` records continue to render as directed relationshi
 
 ### Example Observation Query
 
-Example LogsQL for records stored in VictoriaLogs; replace the selector with labels
+Example LogsQL for Jira observations stored in VictoriaLogs; replace the selector with labels
 that identify your data:
 
 ```logsql
@@ -211,46 +226,46 @@ The extra row allows the panel to warn that a tree may be incomplete. A lower
 datasource limit cannot be detected reliably by the panel. Development pins
 datasource version **0.26.3**, verified to pass the 10,001-row limit through.
 
-Include the parent and **every descendant project** in the query. Filtering to the
-parent's project before fetching would discard cross-project children. Use the
-panel's project filters to preserve ancestor context. For very large Jira datasets,
-scope the query to a complete set of relevant projects rather than silently
-truncating. The panel caps displayed issues at 50,000 even if configured higher.
+Include the parent and **every descendant group** in the query. Filtering to the
+parent's group before fetching would discard cross-group children. Use the
+panel's group filters to preserve ancestor context. For very large datasets,
+scope the query to a complete set of relevant groups rather than silently
+truncating. The panel caps displayed records at 50,000 even if configured higher.
 
 The example query uses the time picker for **observations**, not creation dates;
 your own query controls its time semantics. For observation queries choose a lookback
 longer than the sync interval plus the duration of a full sync and any expected
 outages. The development panel overrides this to 30 days; it then fits the full
-lifetimes of the returned tickets. Local timeline zoom never changes the query.
+lifetimes of the returned records. Local timeline zoom never changes the query.
 Absolute Grafana time ranges disable relative panel overrides.
 
 ## Panel Options
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| Parent ticket | Empty | Initial root key, supports dashboard variables; empty shows all trees |
-| Jira base URL | Empty | Fallback `/browse/<key>` links; allows HTTP(S) and Jira context paths only |
-| Ticket URL field | Empty | Complete HTTP(S) ticket URL from each row; supports multiple sites |
-| Color by field | Empty | Use a flat field's Grafana display color; empty uses Jira status categories |
-| Field mappings | Jira field names | Map incoming fields to issue semantics |
+| Parent record | Empty | Initial root key, supports dashboard variables; empty shows all trees |
+| Jira base URL | Empty | Optional Jira integration: fallback `/browse/<key>` links; allows HTTP(S) and Jira context paths only |
+| Record URL field | Empty | Complete HTTP(S) record URL from each row; supports multiple sites |
+| Color by field | Empty | Use a flat field's Grafana display color; empty uses status categories |
+| Field mappings | Jira-compatible field names | Map incoming fields to record semantics; `project` maps the group |
 | Source identity fields | Empty | Empty uses optional `app`, `instance`, `environment`; configured fields are required |
 | Initially expanded levels | 2 | Expand the root and its direct children on initial display |
-| Stale after (hours) | 24 | Mark each ticket whose last observation is older than this threshold |
-| Maximum issues | 10,000 | Cap with a visible warning when an extra issue is returned |
+| Stale after (hours) | 24 | Mark each record whose last observation is older than this threshold |
+| Maximum records | 10,000 | Cap with a visible warning when an extra record is returned |
 | Row height | 36px | Fixed row size used for virtualization |
-| Ticket column width | 420px | Width of the hierarchy column; bounded to retain a timeline |
+| Record column width | 420px | Width of the hierarchy column; bounded to retain a timeline |
 | Searchable fields | Empty | Comma-separated incoming field names; empty enables built-in and discovered fields |
 | Additional detail and export fields | Empty | Custom-field allowlist for details and `custom_fields` exports; empty discovers all eligible fields |
 | Collapse completed policy | Resolved parent or all descendants resolved | Choose the condition used by **Collapse completed** |
 
 ### Custom Search Fields
 
-Additional fields returned by the query are retained from each ticket's latest
+Additional fields returned by the query are retained from each record's latest
 observation. Text, finite numbers, booleans, and non-empty arrays of those values
 are automatically available in **Search in**. For example, a `company` column with
 the value `Acme` adds **Company** to the selector and matches an **All fields**
-search for `Acme`. Fields are discovered across the returned tickets, even when
-some tickets lack them. Matching is case-insensitive substring search; arrays
+search for `Acme`. Fields are discovered across the returned records, even when
+some records lack them. Matching is case-insensitive substring search; arrays
 match if any element matches. Nested objects and arrays containing objects or nulls
 are excluded; flatten the desired values into named columns in your query.
 
@@ -261,7 +276,7 @@ known log-frame metadata (`labels`, `Line`, `Time`, `time`, `ts`, `id`), and nam
 beginning with `_` are excluded from search discovery.
 Configured source fields and mapped structural fields are also excluded. Explicitly
 mapped built-in search fields remain searchable even when their incoming name is
-normally excluded, such as mapping the issue key to `id`.
+normally excluded, such as mapping the record key to `id`.
 
 To restrict both the selector and **All fields**, set **Searchable fields** to
 incoming names such as `issue_key, summary, company`. Names are case-sensitive;
@@ -287,27 +302,28 @@ independently of the searchable-field allowlist.
 For flat table fields, Grafana field overrides provide display names, units,
 decimals and value mappings in details. Summary and status text also use the native
 display processor. **Color by field** uses that field's Grafana color scheme,
-thresholds or value-mapping color for the ticket bar, with the Jira category color
-as a fallback. Fields nested inside `labels` use plain display values; extract them
+thresholds or value-mapping color for the record bar, with the status-category color
+as a fallback (`new`, `indeterminate`, `done`). Fields nested inside `labels` use plain display values; extract them
 into flat fields to apply Grafana overrides.
 
-Exports retain the canonical issue columns and add a `custom_fields` object with
+Exports retain the backward-compatible canonical columns (`issue_key`, `project_key`,
+`issue_type`, `is_resolved`, etc.) and add a `custom_fields` object with
 the selected custom values. JSON preserves numbers, booleans and scalar arrays;
 CSV stores `custom_fields` as a JSON-encoded cell, like relationship data. Nesting
 prevents custom names such as `depth` or `source` from replacing calculated columns.
 Exported values remain raw even when a display override changes their appearance.
 
-### Ticket Navigation
+### Record Navigation
 
-Ticket details use the first configured link source in this order:
+Record details use the first configured link source in this order:
 
 1. **Grafana data links on the mapped key field.** Link variables use the frame and
-   row of the latest selected observation. For example, `${__data.fields.ticket_url}`
+   row of the latest selected observation. For example, `${__data.fields.record_url}`
    can read a different URL for each site. Link titles, navigation targets and
    Grafana click handlers are preserved. Configure these links on a flat key field.
-2. **Ticket URL field.** Read a complete URL directly from the row or its `labels`,
-   such as `https://jira.example/browse/OPS-42`.
-3. **Jira base URL.** Append `/browse/<encoded-key>` to the configured base URL,
+2. **Record URL field.** Read a complete URL directly from the row or its `labels`,
+    such as `https://records.example/runs/run-1`.
+3. **Jira base URL (optional integration).** Append `/browse/<encoded-key>` to the configured base URL,
    including any Jira context path. Dashboard variables are supported.
 
 Links allow HTTP(S) without embedded credentials; Grafana data links also allow
@@ -328,11 +344,11 @@ uses the configured policy:
 - **Parent and all descendants resolved**: retains branches containing any open work.
 
 Rollups continue to show descendant counts regardless of the policy. Search match
-arrows jump through matching tickets and open their details. **CSV** and **JSON**
+arrows jump through matching records and open their details. **CSV** and **JSON**
 export the complete current filtered tree, including rows hidden by collapse, with
 `child_count`, `child_done_count` and `child_stale_count` fields. Manually
 entering a key matches that key in all returned source namespaces. **Focus subtree**
-in a ticket's details retains its source identity. Relationships never cross source
+in a record's details retains its source identity. Relationships never cross source
 namespaces. A single panel has one Jira base URL; scope to a single Jira site when
 using only that fallback, or configure per-row URLs or Grafana data links.
 CSV prefixes potentially executable spreadsheet text with an apostrophe and stores
@@ -352,7 +368,7 @@ npm run test:e2e
 
 Browser tests require the running, seeded development stack. They exercise the
 real Grafana plugin loader and VictoriaLogs query, hierarchy controls, rollups,
-downloads, reopened tickets, multi-project ancestor context, thousands of virtualized
+downloads, reopened records, multi-group ancestor context, thousands of virtualized
 rows, mobile details, light/dark rendering and query-independent zoom. Images are written to
 the ignored `test-results/` directory. Unit tests cover malformed rows, deduplication,
 source isolation, missing/cyclic parents, a 10,000-level tree, rollups, exports,
@@ -372,8 +388,8 @@ different host API version. No development test server is exposed by the build.
 `npm run build` produces `dist/module.js`, `plugin.json`, the logo, documentation,
 license and changelog.
 Install the **contents of `dist/`** in a Grafana plugin directory named
-`imithrellas-jira-panel`. On a self-hosted development instance, allow only that unsigned
-ID via `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=imithrellas-jira-panel` and restart
+`imithrellas-hierarchy-panel`. On a self-hosted development instance, allow only that unsigned
+ID via `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=imithrellas-hierarchy-panel` and restart
 Grafana. Production distribution requires your approved signing/install process;
 this repository does not include a signing key or a signed release.
 
@@ -383,7 +399,7 @@ Public release builds use the exact version in `package.json` rather than the
 development cache suffix. The release workflow runs on tags matching `v*` and
 creates a public GitHub prerelease with the plugin archive and SHA1 checksum,
 even for the initial unsigned submission. Use the public asset URLs
-`https://github.com/<owner>/<repo>/releases/download/v<version>/<plugin-id>-<version>.zip`
+`https://github.com/iMithrellas/jira-panel/releases/download/v<version>/imithrellas-hierarchy-panel-<version>.zip`
 and the same URL with `.sha1` appended when submitting to Grafana. After Grafana
 approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret
 and rerun the workflow for the same tag. The run signs the plugin, requires the
@@ -423,19 +439,34 @@ GRAFANA_PLUGIN_RELEASE=true npm run build
 The resulting `dist/` contains the files packaged by the release workflow. Do not
 commit `dist/`, dependency directories, test results, or release archives.
 
-Add a Jira Hierarchy panel using any datasource and a query matching the contract above.
+The name and ID change does not grant community signing approval. Source and
+release URLs remain under `https://github.com/iMithrellas/jira-panel`; the GitHub
+repository has not been renamed.
+
+### Migration From Jira Hierarchy
+
+Install the new plugin in `imithrellas-hierarchy-panel` and update your
+unsigned-plugin allowlist if using an unsigned development build. In saved
+dashboard JSON, change each affected panel's `type` from
+`imithrellas-jira-panel` to `imithrellas-hierarchy-panel`, then reload it.
+Grafana does not automatically migrate plugin IDs. Existing dashboard options,
+including `maxIssues`, `jiraBaseUrl`, `issueUrlField`, and `fieldMappings`, remain
+valid; the input and export contracts are unchanged. Keep a dashboard backup and
+only remove the old plugin installation after migrating all affected panels.
+
+Add a Hierarchy Timeline panel using a compatible datasource and a query matching the contract above.
 Any new dashboard for this project should live in **Operations**. The development
 dashboard is not directly portable without changing its datasource UID, demo
 source selector and Jira URL. Existing shared dashboards were not modified.
 
 This is a latest-observation view, not an authoritative current-membership database.
-Deleted, moved, permission-hidden or JQL-excluded tickets can remain visible until
+Deleted, moved, permission-hidden or query-excluded records can remain visible until
 they fall outside the query window. A partially failed sync can leave observation
-times mixed across tickets. Freshness is shown per ticket; no completeness claim
+times mixed across records. Freshness is shown per record; no completeness claim
 is inferred from the newest timestamp. Missing or invalid rows and known cap
 truncation are explicitly reported, but unseen data cannot be reconstructed.
 
 The `core-traces-panel` and `grafana-gantt-panel` projects inspired the layout and
 interactions. Their source was not copied. The panel does
-not import Grafana-internal TraceView modules, encode Jira as spans, or require a
+not import Grafana-internal TraceView modules, encode records as spans, or require a
 trace backend.

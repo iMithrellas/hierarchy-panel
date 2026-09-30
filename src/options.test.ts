@@ -14,12 +14,12 @@ describe('normalizeOptions', () => {
   it('keeps valid values while discarding invalid provisioned values', () => {
     expect(normalizeOptions({
       rootKey: 'PROJ-1', jiraBaseUrl: 5, initialDepth: 4, rowHeight: 100, maxIssues: 20,
-      fieldMappings: { key: 'ticket', summary: 3, links: 'edges', unexpected: 'ignored' },
+      fieldMappings: { key: 'record', summary: 3, links: 'edges', unexpected: 'ignored' },
       collapseMode: 'subtree', metadataFields: '', searchableFields: ['bad'],
     })).toEqual({
       ...defaults,
       rootKey: 'PROJ-1', initialDepth: 4, rowHeight: 100, maxIssues: 20,
-      fieldMappings: { key: 'ticket', links: 'edges' }, collapseMode: 'subtree',
+      fieldMappings: { key: 'record', links: 'edges' }, collapseMode: 'subtree',
     });
   });
 

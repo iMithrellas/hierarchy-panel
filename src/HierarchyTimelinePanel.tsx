@@ -3,19 +3,19 @@ import { dateTimeFormat, type GrafanaTheme2, type PanelProps } from '@grafana/da
 import { useStyles2, useTheme2 } from '@grafana/ui';
 import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { discoverSearchFields, readIssues } from './data';
-import { IssueDetails } from './IssueDetails';
+import { RecordDetails } from './RecordDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
 import { categoryColor, presentField } from './presentation';
 import { normalizeOptions } from './options';
 import { resetScrollTop } from './panelState';
 import { getQueryErrors, getQueryErrorEmptyMessage, getQueryFailureAlertMessages, isQueryFailure } from './queryErrors';
-import { defaults, type Issue, type JiraOptions, type SearchField } from './types';
+import { defaults, type Issue, type HierarchyTimelineOptions, type SearchField } from './types';
 import { ValidationDetails } from './ValidationDetails';
 
 const clamp = (value: number | undefined, fallback: number, min: number, max: number) =>
   Number.isFinite(value) ? Math.max(min, Math.min(max, Number(value))) : fallback;
 
-export function JiraPanel({ data, options, width, height, timeZone, replaceVariables }: PanelProps<JiraOptions>) {
+export function HierarchyTimelinePanel({ data, options, width, height, timeZone, replaceVariables }: PanelProps<HierarchyTimelineOptions>) {
   options = normalizeOptions(options);
   const theme = useTheme2();
   const styles = useStyles2(getStyles);
@@ -36,7 +36,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const [scroll, setScroll] = useState({ top: 0, left: 0, height: 400 });
   const viewport = useRef<HTMLDivElement>(null);
   const detailsTrigger = useRef<HTMLButtonElement>();
-  const arrowMarkerId = `jira-arrow-${useId().replaceAll(':', '')}`;
+  const arrowMarkerId = `hierarchy-arrow-${useId().replaceAll(':', '')}`;
   const rowHeight = Math.round(clamp(options.rowHeight, defaults.rowHeight, 30, 60));
   const maxIssues = Math.round(clamp(options.maxIssues, defaults.maxIssues, 1, 50000));
   const initialDepth = Math.round(clamp(options.initialDepth, defaults.initialDepth, 0, 20));
@@ -207,9 +207,9 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     const blob = new Blob([body], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
-    const scope = (root || 'all-tickets').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'tickets';
+    const scope = (root || 'all-records').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'records';
     anchor.href = url;
-    anchor.download = `jira-${scope}.${format}`;
+    anchor.download = `hierarchy-${scope}.${format}`;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   };
@@ -232,11 +232,11 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   };
   const ticks = Array.from({ length: 5 }, (_, i) => range[0] + (range[1] - range[0]) * i / 4);
   const warnings = [
-    parsed.truncated ? `Partial result: limited to ${maxIssues.toLocaleString()} issues. Narrow the query; parents or children may be missing.` : '',
+    parsed.truncated ? `Partial result: limited to ${maxIssues.toLocaleString()} records. Narrow the query; parents or children may be missing.` : '',
     parsed.invalid ? `${parsed.invalid} invalid row(s) excluded. Check validation details and field mappings.` : '',
-    stats.warnings ? `${stats.warnings} missing or cyclic parent relationship(s); affected tickets remain visible.` : '',
+    stats.warnings ? `${stats.warnings} missing or cyclic parent relationship(s); affected records remain visible.` : '',
     sourceCount > 1 ? `${sourceCount} source namespaces; relationships are isolated per source.` : '',
-    sourceCount > 1 && options.jiraBaseUrl?.trim() ? 'Jira base URL fallback is disabled for multiple source namespaces to prevent links opening on the wrong Jira site. Configure per-row ticket URLs or key-field data links.' : '',
+    sourceCount > 1 && options.jiraBaseUrl?.trim() ? 'Jira base URL fallback is disabled for multiple source namespaces to prevent links opening on the wrong Jira site. Configure per-row record URLs or key-field data links.' : '',
   ].filter(Boolean);
   // Grafana 10+ uses errors; prefer it whenever populated so the deprecated
   // singular field cannot produce a duplicate alert for the same query error.
@@ -245,14 +245,14 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const queryFailed = isQueryFailure(data.state, hasQueryErrors);
 
   return (
-    <section className={styles.panel} style={{ width, height }} aria-label="Jira hierarchy timeline" onKeyDown={(event) => {
+    <section className={styles.panel} style={{ width, height }} aria-label="Hierarchy Timeline records" onKeyDown={(event) => {
       if (event.key === 'Escape' && selected) { event.preventDefault(); event.stopPropagation(); closeDetails(); }
     }}>
-      <div className={styles.panelScroll} data-testid="jira-panel-scroll">
+      <div className={styles.panelScroll} data-testid="hierarchy-panel-scroll">
       <div className={styles.panelContent}>
       <div className={styles.toolbar}>
         <label className={styles.rootLabel}>Parent
-          <input aria-label="Parent ticket" placeholder="All ticket trees" value={root} onChange={(event) => { setRoot(event.target.value); setRootSource(undefined); }} />
+          <input aria-label="Parent record" placeholder="All record trees" value={root} onChange={(event) => { setRoot(event.target.value); setRootSource(undefined); }} />
         </label>
         <label className={styles.searchField}>Search in
           <select aria-label="Search field" value={activeSearchField} onChange={(event) => setSearchField(event.target.value as SearchField)}>
@@ -260,11 +260,11 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
             {searchFieldOptions.map((option) => <option key={option.value} value={option.value} title={option.field}>{option.label}</option>)}
           </select>
         </label>
-        <input className={styles.search} aria-label="Search tickets" placeholder={activeSearchField === 'all' ? 'Search all fields...' : `Search ${searchFieldOptions.find((option) => option.value === activeSearchField)?.label.toLowerCase()}...`} value={search} onChange={(event) => setSearch(event.target.value)} />
+        <input className={styles.search} aria-label="Search records" placeholder={activeSearchField === 'all' ? 'Search all fields...' : `Search ${searchFieldOptions.find((option) => option.value === activeSearchField)?.label.toLowerCase()}...`} value={search} onChange={(event) => setSearch(event.target.value)} />
         <details className={styles.projects}>
-          <summary>Projects {projects.length ? `(${projects.length})` : '(all)'}</summary>
+          <summary>Groups {projects.length ? `(${projects.length})` : '(all)'}</summary>
           <div className={styles.projectMenu}>
-            <button type="button" onClick={() => setProjects([])}>All projects</button>
+            <button type="button" onClick={() => setProjects([])}>All groups</button>
             {availableProjects.map((project) => <label key={project}>
               <input type="checkbox" checked={projects.includes(project)} onChange={() => setProjects((previous) => previous.includes(project)
                 ? previous.filter((p) => p !== project) : [...previous, project])} />{project}
@@ -290,14 +290,14 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
           <button type="button" aria-pressed={!showRelationships} onClick={() => setShowRelationships((visible) => !visible)}>{showRelationships ? 'Hide arrows' : 'Show arrows'}</button>
           <button type="button" aria-label="Export CSV" disabled={!selection.exportRows.length} onClick={() => download('csv')}>CSV</button>
           <button type="button" aria-label="Export JSON" disabled={!selection.exportRows.length} onClick={() => download('json')}>JSON</button>
-          <span className={styles.count} data-testid="issue-count">{selection.matchingCount.toLocaleString()} tickets / {selection.rows.length.toLocaleString()} rows</span>
+          <span className={styles.count} data-testid="issue-count">{selection.matchingCount.toLocaleString()} records / {selection.rows.length.toLocaleString()} rows</span>
         </div>
         <div className={styles.actions}>
           <button type="button" aria-label="Pan earlier" onClick={() => pan(-1)}>&lt;</button>
           <button type="button" aria-label="Zoom in" onClick={() => zoom(0.5)}>+</button>
           <button type="button" aria-label="Zoom out" onClick={() => zoom(2)}>-</button>
           <button type="button" aria-label="Pan later" onClick={() => pan(1)}>&gt;</button>
-          <button type="button" onClick={() => setRangeOverride(undefined)}>Fit tickets</button>
+          <button type="button" onClick={() => setRangeOverride(undefined)}>Fit records</button>
         </div>
       </div>
       <div className={styles.status}>
@@ -322,13 +322,13 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
       </div>}
       <div className={styles.axisClip}>
         <div className={styles.axis} style={{ width: innerWidth, transform: `translateX(${-scroll.left}px)` }}>
-          <div style={{ width: labelWidth }} className={styles.axisTitle}>TICKET / SUMMARY</div>
+          <div style={{ width: labelWidth }} className={styles.axisTitle}>RECORD / SUMMARY</div>
           <div className={styles.ticks} style={{ width: timelineWidth }}>
             {ticks.map((tick, i) => <span key={i} style={{ left: `${i * 25}%`, transform: `translateX(${i === 0 ? 0 : i === 4 ? -100 : -50}%)` }}>{format(tick, true)}</span>)}
           </div>
         </div>
       </div>
-      <div ref={viewport} className={styles.viewport} data-testid="jira-viewport" role="treegrid" aria-label="Jira tickets" tabIndex={0}
+      <div ref={viewport} className={styles.viewport} data-testid="hierarchy-viewport" role="treegrid" aria-label="Records" tabIndex={0}
         onMouseMove={handleViewportMouseMove} onMouseLeave={() => setHoveredRelationship(undefined)}
         aria-rowcount={selection.rows.length} aria-colcount={2}
         onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft, height: event.currentTarget.clientHeight })}>
@@ -345,12 +345,12 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
             const title = `${issue.key}: ${issue.summary}\n${issue.status} | ${issue.type} | ${issue.assignee || 'Unassigned'}\nCreated: ${format(issue.start)}\n${issue.resolved ? 'Resolved' : 'Last observed'}: ${format(issue.end)}\nLifetime: ${duration(issue)}${stale ? '\nStale observation' : ''}${node.warning ? `\n${node.warning}` : ''}`;
             return <div key={issue.id} role="row" aria-rowindex={first + index + 1} aria-level={depth + 1}
               aria-expanded={hasChildren ? expanded : undefined} aria-selected={selectedID === issue.id}
-              data-testid="jira-row" data-issue-key={issue.key} className={styles.row}
+              data-testid="hierarchy-row" data-issue-key={issue.key} className={styles.row}
               style={{ height: rowHeight, top: (first + index) * rowHeight, background: selectedID === issue.id ? theme.colors.action.selected : undefined }}>
               <div role="gridcell" className={styles.labelCell} style={{ width: labelWidth, paddingLeft: Math.min(depth, 12) * 16 + 8 }}>
                 <button className={styles.expander} type="button" disabled={!hasChildren || selection.filtering} aria-label={`${expanded ? 'Collapse' : 'Expand'} ${issue.key}`}
                   style={{ visibility: hasChildren ? 'visible' : 'hidden' }} onClick={() => toggle(issue.id, expanded)}>{expanded ? 'v' : '>'}</button>
-                <button type="button" className={styles.ticket} style={{ opacity: context ? 0.6 : 1 }} title={title} onClick={(event) => openDetails(issue.id, event.currentTarget)}>
+                <button type="button" className={styles.record} style={{ opacity: context ? 0.6 : 1 }} title={title} onClick={(event) => openDetails(issue.id, event.currentTarget)}>
                   <span className={styles.key}>{issue.key}</span><span className={styles.summary}>{summary || '(no summary)'}</span>
                   {!!rollup?.descendants && <span className={styles.rollup} data-testid="rollup-badge" title={`${rollup.descendants} descendants, ${rollup.doneDescendants} done, ${rollup.staleDescendants} stale`}>{rollup.descendants} children / {rollup.doneDescendants} done{rollup.staleDescendants ? ` / ${rollup.staleDescendants} stale` : ''}</span>}
                 </button>
@@ -386,20 +386,20 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
           </svg>}
         </div>
         {!selection.rows.length && <div className={styles.empty}>
-          <strong>{data.state === 'Loading' ? 'Loading Jira tickets...' : queryFailed ? 'Jira query error' : 'No matching tickets'}</strong>
+          <strong>{data.state === 'Loading' ? 'Loading records...' : queryFailed ? 'Query error' : 'No matching records'}</strong>
           <p>{queryFailed ? getQueryErrorEmptyMessage(parsed.issues.length > 0, hasQueryErrors)
-            : !parsed.issues.length ? 'Return complete issue observations matching the query contract as a table or logs frame. Check the query range and required fields.'
-            : root && !selection.scopedCount ? `Parent ${root} is not in the result. Clear Parent to browse all trees; include the parent and every child project in the query.`
-              : 'Clear search or project filters to see tickets.'}</p>
+            : !parsed.issues.length ? 'Return complete record observations matching the query contract as a table or logs frame. Check the query range and required fields.'
+            : root && !selection.scopedCount ? `Parent ${root} is not in the result. Clear Parent to browse all trees; include the parent and every child group in the query.`
+              : 'Clear search or group filters to see records.'}</p>
         </div>}
       </div>
       <div className={styles.footer}>
-        <span>Actual Jira parents / observed lifetimes, not planned schedules</span>
-        <span>{selection.filtering ? 'Matching tickets + ancestor context' : 'Timeline fits fetched tickets; zoom is local'}</span>
+        <span>Record parents / observed lifetimes, not planned schedules</span>
+        <span>{selection.filtering ? 'Matching records + ancestor context' : 'Timeline fits fetched records; zoom is local'}</span>
       </div>
       </div>
       </div>
-      {selected && <IssueDetails issue={selected} frame={data.series[selected.origin.frameIndex]} fields={parsed.fieldMappings}
+      {selected && <RecordDetails issue={selected} frame={data.series[selected.origin.frameIndex]} fields={parsed.fieldMappings}
         rollup={rollups.get(selected.id)} warning={tree.nodes.get(selected.id)?.warning} stale={clock - selected.observed > staleMs}
         format={format} duration={duration(selected)} metadataFields={options.metadataFields} urlField={options.issueUrlField}
          baseUrl={sourceCount === 1 ? replaceVariables(options.jiraBaseUrl ?? '') : ''} fallbackBlocked={sourceCount > 1 && !!options.jiraBaseUrl?.trim()} styles={styles}
@@ -452,7 +452,7 @@ function getStyles(theme: GrafanaTheme2) {
     row: css({ position: 'absolute', display: 'flex', width: '100%', borderBottom: `1px solid ${border}`, '&:hover': { background: theme.colors.action.hover } }),
     labelCell: css({ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 3, paddingRight: 6, borderRight: `1px solid ${border}`, boxSizing: 'border-box', minWidth: 0 }),
     expander: css({ '&&': { width: 20, flexShrink: 0, padding: 0, border: 0, background: 'none', fontFamily: 'monospace', color: theme.colors.text.secondary } }),
-    ticket: css({ '&&': { minWidth: 0, padding: 0, border: 0, background: 'none', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', flex: 1 } }),
+    record: css({ '&&': { minWidth: 0, padding: 0, border: 0, background: 'none', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', flex: 1 } }),
     key: css({ flexShrink: 0, fontFamily: theme.typography.fontFamilyMonospace, fontSize: 11, color: theme.colors.text.link }),
     summary: css({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
     rollup: css({ flexShrink: 0, color: theme.colors.text.secondary, fontSize: 10, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }),

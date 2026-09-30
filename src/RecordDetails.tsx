@@ -1,7 +1,7 @@
 import type { DataFrame } from '@grafana/data';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { selectMetadata } from './data';
-import { presentField, ticketLinks } from './presentation';
+import { presentField, recordLinks } from './presentation';
 import type { Issue, IssueFieldMapping, Rollup } from './types';
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
   styles: Record<'detail' | 'detailHeader' | 'stale' | 'relationships' | 'actions', string>;
 }
 
-export function IssueDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, fallbackBlocked, onClose, onDismiss, onFocus, styles }: Props) {
+export function RecordDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, fallbackBlocked, onClose, onDismiss, onFocus, styles }: Props) {
   const details = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { closeButton.current?.focus(); }, [issue.id]);
@@ -36,14 +36,14 @@ export function IssueDetails({ issue, frame, fields, rollup, warning, stale, for
       });
     };
   }, [onDismiss]);
-  const links = ticketLinks(frame, issue, { keyField: fields.key, urlField, baseUrl, fallbackBlocked });
+  const links = recordLinks(frame, issue, { keyField: fields.key, urlField, baseUrl, fallbackBlocked });
   const metadata = Object.keys(selectMetadata(issue, metadataFields)).sort().map((name) => ({ name, ...presentField(frame, issue, name) }));
   const attributes = [
-    ['status', 'Status', 'Unknown'], ['type', 'Type', 'Unknown'], ['project', 'Project', ''],
+    ['status', 'Status', 'Unknown'], ['type', 'Type', 'Unknown'], ['project', 'Group', ''],
     ['parent', 'Parent', 'None'], ['assignee', 'Assignee', 'Unassigned'], ['priority', 'Priority', 'Not set'],
   ] as const;
-  return <aside ref={details} className={styles.detail} aria-label={`Ticket details ${issue.key}`}>
-    <div className={styles.detailHeader}><strong>{issue.key}</strong><button ref={closeButton} type="button" aria-label="Close ticket details" onClick={onClose}>Close</button></div>
+  return <aside ref={details} className={styles.detail} aria-label={`Record details ${issue.key}`}>
+    <div className={styles.detailHeader}><strong>{issue.key}</strong><button ref={closeButton} type="button" aria-label="Close record details" onClick={onClose}>Close</button></div>
     <h3>{presentField(frame, issue, fields.summary).text || '(no summary)'}</h3>
     <dl>
       {attributes.map(([mapping, label, fallback]) => {
@@ -62,7 +62,7 @@ export function IssueDetails({ issue, frame, fields, rollup, warning, stale, for
       <dl aria-label="Additional fields">{metadata.map(({ name, label, text, color }) =>
         <div key={name}><dt title={name}>{label}</dt><dd style={{ color }}>{text}</dd></div>)}</dl>
     </>}
-    {stale && <p className={styles.stale}>Stale observation. Current Jira state may differ.</p>}
+    {stale && <p className={styles.stale}>Stale observation. Current record state may differ.</p>}
     {warning && <p className={styles.stale}>{warning}</p>}
     {issue.links.length > 0 && <div className={styles.relationships}>
       <strong>Relationships</strong>

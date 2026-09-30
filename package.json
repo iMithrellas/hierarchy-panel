@@ -1,9 +1,9 @@
 {
-  "name": "imithrellas-jira-panel",
+  "name": "imithrellas-hierarchy-panel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Virtualized Jira parent hierarchy and observed lifetime timeline for Grafana",
+  "description": "Datasource-agnostic record hierarchy and observed lifetime timeline for Grafana",
   "scripts": {
     "build": "tsc --noEmit && webpack -c ./.config/webpack/webpack.config.ts --env production",
     "sign": "sign-plugin",

@@ -1,7 +1,7 @@
 import type { DataFrame } from '@grafana/data';
 import { describe, expect, it, vi } from 'vitest';
 import { readIssues } from './data';
-import { presentField, ticketLinks } from './presentation';
+import { presentField, recordLinks } from './presentation';
 
 const input = (rows: Array<Record<string, unknown>>): DataFrame => ({
   length: rows.length,
@@ -50,7 +50,7 @@ describe('Grafana field presentation', () => {
     expect(issue.summary).toBe('Final summary');
     expect(presentField(frame, issue, 'summary').text).toBe('Formatted final summary');
     expect(oldSummary.display).not.toHaveBeenCalled();
-    expect(ticketLinks(frame, issue, { keyField: 'issue_key', baseUrl: 'https://jira.example' }).links)
+    expect(recordLinks(frame, issue, { keyField: 'issue_key', baseUrl: 'https://jira.example' }).links)
       .toMatchObject([{ href: '/d/final', title: 'Final field link' }]);
     expect(finalKey.getLinks).toHaveBeenCalledWith({ valueRowIndex: 0 });
   });
@@ -65,7 +65,7 @@ describe('Grafana field presentation', () => {
   });
 });
 
-describe('ticket navigation', () => {
+describe('record navigation', () => {
   it('uses Grafana data links for the winning row of a mapped key field', () => {
     const old = input([row({ key: 'I-1' })]);
     const latest = input([row({ key: 'I-2' }), row({ key: 'I-1', sync_ts: 200 })]);
@@ -73,7 +73,7 @@ describe('ticket navigation', () => {
     const onClick = vi.fn();
     field.getLinks = vi.fn(({ valueRowIndex }) => [{ title: 'Inspect', href: `/d/issues?row=${valueRowIndex}`, target: '_self' as const, origin: field, onClick }]);
     const issue = readIssues([old, latest], 10, { fieldMappings: { key: 'key' } }).issues.find(({ key }) => key === 'I-1')!;
-    const result = ticketLinks([old, latest][issue.origin.frameIndex], issue, { keyField: 'key', baseUrl: 'https://wrong.example' });
+    const result = recordLinks([old, latest][issue.origin.frameIndex], issue, { keyField: 'key', baseUrl: 'https://wrong.example' });
     expect(field.getLinks).toHaveBeenCalledWith({ valueRowIndex: 1 });
     expect(result.links).toMatchObject([{ href: '/d/issues?row=1', title: 'Inspect', target: '_self', onClick }]);
   });
@@ -81,13 +81,13 @@ describe('ticket navigation', () => {
   it('supports distinct per-row URLs for identical keys in different sources', () => {
     const frame = input([row({ instance: 'east', url: 'https://east.example/issues/I-1' }), row({ instance: 'west', url: 'https://west.example/issues/I-1' })]);
     const issues = readIssues([frame], 10).issues;
-    expect(issues.map((issue) => ticketLinks(frame, issue, { keyField: 'issue_key', urlField: 'url', baseUrl: 'https://wrong.example' }).links[0].href))
+    expect(issues.map((issue) => recordLinks(frame, issue, { keyField: 'issue_key', urlField: 'url', baseUrl: 'https://wrong.example' }).links[0].href))
       .toEqual(['https://east.example/issues/I-1', 'https://west.example/issues/I-1']);
   });
 
   it.each([undefined, {}, '', 'javascript:alert(1)', 'https://user:password@example.test', '/relative'])('does not fall back to a different site for an invalid configured URL: %j', (url) => {
     const frame = input([row({ url })]);
-    const result = ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', urlField: 'url', baseUrl: 'https://wrong.example' });
+    const result = recordLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', urlField: 'url', baseUrl: 'https://wrong.example' });
     expect(result.links).toEqual([]);
     expect(result.warning).toContain('missing or invalid');
   });
@@ -96,20 +96,20 @@ describe('ticket navigation', () => {
     const frame = input([row()]);
     const field = frame.fields.find(({ name }) => name === 'issue_key')!;
     field.getLinks = () => ['javascript:alert(1)', '//example.test', '/\\example.test', '/d/good', 'https://example.test/ok'].map((href) => ({ href, title: href, target: '_blank', origin: field }));
-    const result = ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key' });
+    const result = recordLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key' });
     expect(result.links.map(({ href }) => href)).toEqual(['/d/good', 'https://example.test/ok']);
     expect(result.warning).toBeDefined();
   });
 
   it('retains the Jira context-path fallback when no other link source is configured', () => {
     const frame = input([row()]);
-    expect(ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', baseUrl: 'https://jira.example/context/' }).links)
+    expect(recordLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', baseUrl: 'https://jira.example/context/' }).links)
       .toMatchObject([{ title: 'Open in Jira', href: 'https://jira.example/context/browse/I-1' }]);
   });
 
   it('blocks the global fallback for mixed sources while retaining a meaningful warning', () => {
     const frame = input([row()]);
-    const result = ticketLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', fallbackBlocked: true });
+    const result = recordLinks(frame, readIssues([frame], 10).issues[0], { keyField: 'issue_key', fallbackBlocked: true });
     expect(result.links).toEqual([]);
     expect(result.warning).toContain('multiple source namespaces');
     expect(result.warning).toContain('wrong Jira site');

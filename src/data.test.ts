@@ -20,7 +20,23 @@ const mappedRow = (id: string, extra: Record<string, unknown> = {}) => ({
   id, opened: 0, observedAt: 100, closed: false, site: 'east', title: `Item ${id}`, ...extra,
 });
 
-describe('configurable issue input', () => {
+describe('configurable record input', () => {
+  it('accepts the generic schema example without Jira fields and retains canonical export keys', () => {
+    const result = readIssues([table([
+      { id: 'run-1', group: 'batch', title: 'Import run', started_at: '2026-09-01T10:00:00Z', observed_at: '2026-09-01T12:00:00Z', closed: false, record_url: 'https://records.example/runs/run-1' },
+      { id: 'step-1', parent_id: 'run-1', group: 'batch', title: 'Validate input', started_at: '2026-09-01T10:05:00Z', observed_at: '2026-09-01T12:00:00Z', ended_at: '2026-09-01T10:15:00Z', closed: true, record_url: 'https://records.example/steps/step-1' },
+    ])], 10, { fieldMappings: {
+      key: 'id', parent: 'parent_id', project: 'group', summary: 'title', created: 'started_at', observed: 'observed_at', resolved: 'ended_at', isResolved: 'closed', links: 'relations',
+    } });
+    expect(result.invalid).toBe(0);
+    expect(result.issues[0]).toMatchObject({ key: 'run-1', project: 'batch', resolved: false, end: Date.parse('2026-09-01T12:00:00Z') });
+    expect(result.issues[1]).toMatchObject({ key: 'step-1', parentKey: 'run-1', resolved: true, end: Date.parse('2026-09-01T10:15:00Z') });
+    const tree = buildTree(result.issues);
+    const selected = selectRows(tree, '', '', ['batch'], new Map(), 2);
+    expect(selected.rows).toHaveLength(2);
+    expect(exportRecords(selected.exportRows, computeRollups(tree, 0, 24))[1]).toMatchObject({ issue_key: 'step-1', parent_key: 'run-1', project_key: 'batch', is_resolved: true });
+  });
+
   it('maps a non-Jira schema into hierarchy, search, lifecycle and relationships', () => {
     const result = readIssues([table([
       mappedRow('P-1', { workspace: 'Program' }),

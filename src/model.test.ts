@@ -8,7 +8,7 @@ const observed = '2026-09-06T12:00:00Z';
 const created = '2026-06-01T12:00:00Z';
 const record = (key: string, parent = '', extra: Record<string, unknown> = {}) => ({
   app: 'jira-test-data', instance: 'test', environment: 'dev', issue_key: key,
-  project_key: key.split('-')[0], parent_key: parent, summary: `Ticket ${key}`,
+  project_key: key.split('-')[0], parent_key: parent, summary: `Record ${key}`,
   is_resolved: false, created_at: created, sync_ts: observed, ...extra,
 });
 const logs = (rows: Record<string, unknown>[]): DataFrame => ({
@@ -280,7 +280,7 @@ describe('real parent hierarchy', () => {
     expect(selected.exportRows.at(-1)?.depth).toBe(9999);
   });
 
-  it('search and project filters retain ancestors and automatically expose matches', () => {
+  it('search and group filters retain ancestors and automatically expose matches', () => {
     const result = select('PM-1', 'REL-1', ['REL'], 0);
     expect(result.matchingCount).toBe(1);
     expect(result.rows.map((r) => [r.node.issue.key, r.context])).toEqual([['PM-1', true], ['OPS-1', true], ['REL-1', false]]);
@@ -301,7 +301,7 @@ describe('real parent hierarchy', () => {
     expect(result.matchingCount).toBe(3);
   });
 
-  it('isolates identical ticket keys in different sources', () => {
+  it('isolates identical record keys in different sources', () => {
     const result = buildTree(issues([record('PM-1'), record('OPS-1', 'PM-1', { instance: 'different' })]));
     expect(result.roots).toHaveLength(2);
     expect([...result.nodes.values()].find((n) => n.issue.key === 'OPS-1')?.warning).toContain('not in the query result');
@@ -313,7 +313,7 @@ describe('real parent hierarchy', () => {
     expect(selectRows(result, '', '', [], new Map(), 10).rows).toHaveLength(2);
   });
 
-  it('trims parent identities consistently with ticket keys', () => {
+  it('trims parent identities consistently with record keys', () => {
     const result = buildTree(issues([record(' PM-1 '), record('OPS-1', ' PM-1 ')]));
     expect(result.roots).toHaveLength(1);
     expect(selectRows(result, 'PM-1', '', [], new Map(), 2).issues.map((issue) => issue.key)).toEqual(['PM-1', 'OPS-1']);

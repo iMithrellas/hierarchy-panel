@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 
 async function configurePanel(page: Page, options: Record<string, unknown>, overrides: unknown[] = []) {
-  await page.route(/\/(?:api\/dashboards\/uid|apis\/dashboard\.grafana\.app\/[^/]+\/namespaces\/[^/]+\/dashboards)\/jira-hierarchy-dev(?:\/dto)?(?:\?|$)/, async (route) => {
+  await page.route(/\/(?:api\/dashboards\/uid|apis\/dashboard\.grafana\.app\/[^/]+\/namespaces\/[^/]+\/dashboards)\/hierarchy-timeline-dev(?:\/dto)?(?:\?|$)/, async (route) => {
     const response = await route.fetch();
     const body = await response.json();
     const dashboard = body.dashboard ?? body.spec;
@@ -14,17 +14,17 @@ async function configurePanel(page: Page, options: Record<string, unknown>, over
   });
 }
 
-async function mockTickets(page: Page, keys: () => string[], beforeResponse: () => Promise<void> = async () => {}) {
+async function mockRecords(page: Page, keys: () => string[], beforeResponse: () => Promise<void> = async () => {}) {
   const now = Date.now();
   await page.route('**/api/ds/query*', async (route) => {
     await beforeResponse();
-    const tickets = keys();
+    const records = keys();
     await route.fulfill({ json: { results: { A: { status: 200, frames: [{
       schema: { refId: 'A', fields: [
         { name: 'issue_key', type: 'string' }, { name: 'summary', type: 'string' },
         { name: 'created_at', type: 'time' }, { name: 'sync_ts', type: 'time' }, { name: 'is_resolved', type: 'boolean' },
       ] },
-      data: { values: [tickets, tickets.map((key) => `Matching ticket ${key}`), tickets.map(() => now - 86400000), tickets.map(() => now), tickets.map(() => false)] },
+      data: { values: [records, records.map((key) => `Matching record ${key}`), records.map(() => now - 86400000), records.map(() => now), records.map(() => false)] },
     }] } } } });
   });
 }
@@ -37,23 +37,25 @@ async function refreshDashboard(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development?kiosk');
-  await expect(page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true })).toBeVisible();
-  await expect(page.getByTestId('issue-count')).toContainText('62 tickets');
+  await page.goto('/d/hierarchy-timeline-dev/hierarchy-timeline-development?kiosk');
+  await expect(page.getByRole('region', { name: 'Hierarchy Timeline records', exact: true })).toBeVisible();
+  await expect(page.getByTestId('issue-count')).toContainText('62 records');
+  await expect(page.getByText('RECORD / SUMMARY', { exact: true })).toBeVisible();
 });
 
 test('loads the plugin with a cache version matching the current build', async ({ page, request }) => {
   const bundle = await readFile(new URL('../dist/module.js', import.meta.url));
   const hash = createHash('sha256').update(bundle).digest('hex').slice(0, 12);
-  const response = await request.get('/public/plugins/imithrellas-jira-panel/plugin.json');
+  const response = await request.get('/public/plugins/imithrellas-hierarchy-panel/plugin.json');
   expect(response.ok()).toBe(true);
   const metadata = await response.json();
+  expect(metadata).toMatchObject({ id: 'imithrellas-hierarchy-panel', name: 'Hierarchy Timeline' });
   expect(metadata.info.version).toMatch(new RegExp(`\\+${hash}$`));
-  const servedBundle = await request.get('/public/plugins/imithrellas-jira-panel/module.js');
+  const servedBundle = await request.get('/public/plugins/imithrellas-hierarchy-panel/module.js');
   expect(servedBundle.ok()).toBe(true);
   expect(await servedBundle.body()).toEqual(bundle);
   const urls = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => entry.name));
-  const pluginUrl = urls.find((url) => new URL(url).pathname === '/public/plugins/imithrellas-jira-panel/module.js');
+  const pluginUrl = urls.find((url) => new URL(url).pathname === '/public/plugins/imithrellas-hierarchy-panel/module.js');
   expect(pluginUrl).toBeDefined();
   expect(new URL(pluginUrl!).searchParams.get('_cache')?.replace(/ /g, '+')).toBe(metadata.info.version);
 });
@@ -80,48 +82,48 @@ test('loads real VictoriaLogs results, expands parents and shows observed end de
   await expect(page.getByTestId('relationship-arrow')).toHaveCount(0);
   await page.getByRole('button', { name: 'Show arrows', exact: true }).click();
   await expect(page.getByTestId('relationship-arrow')).toHaveCount(5);
-  await page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true }).screenshot({ path: 'test-results/hierarchy-dark.png' });
+  await page.getByRole('region', { name: 'Hierarchy Timeline records', exact: true }).screenshot({ path: 'test-results/hierarchy-dark.png' });
   await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
-  await expect(page.getByTestId('jira-row')).toHaveCount(1);
+  await expect(page.getByTestId('hierarchy-row')).toHaveCount(1);
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   await expect(page.getByRole('treegrid')).toHaveAttribute('aria-rowcount', '62');
   await page.getByRole('button', { name: 'Details for PM-100', exact: true }).click();
-  const details = page.getByRole('complementary', { name: 'Ticket details PM-100' });
+  const details = page.getByRole('complementary', { name: 'Record details PM-100' });
   await expect(details).toContainText('Observed end');
   await expect(details).toContainText('blocks');
   await expect(details.getByRole('link', { name: 'Open in Jira' })).toHaveAttribute('href', 'https://jira.example.invalid/browse/PM-100');
-  await page.getByRole('button', { name: 'Close ticket details' }).click();
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Demo reopened issue');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
+  await page.getByRole('button', { name: 'Close record details' }).click();
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Demo reopened issue');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
   await page.getByRole('button', { name: 'Details for OPS-900003', exact: true }).click();
   await expect(page.getByRole('complementary')).toContainText('Reopened');
   await expect(page.getByRole('complementary')).toContainText('Observed end');
   await page.getByRole('button', { name: 'Focus subtree', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Parent ticket', exact: true })).toHaveValue('OPS-900003');
-  await expect(page.getByTestId('jira-row')).toHaveCount(1);
-  await expect(page.getByText('Source: jira-panel-fixture / demo / development', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Parent record', exact: true })).toHaveValue('OPS-900003');
+  await expect(page.getByTestId('hierarchy-row')).toHaveCount(1);
+  await expect(page.getByText('Source: hierarchy-timeline-fixture / demo / development', { exact: true })).toBeVisible();
 });
 
 test('discovers and searches a sparse company field from the query result', async ({ page }) => {
   const field = page.getByRole('combobox', { name: 'Search field' });
-  const search = page.getByRole('textbox', { name: 'Search tickets' });
+  const search = page.getByRole('textbox', { name: 'Search records' });
   await expect(field.locator('option', { hasText: /^Company$/ })).toHaveCount(1);
   await search.fill('acme');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
   await expect(page.getByRole('button', { name: 'Details for OPS-900003', exact: true })).toBeVisible();
   await field.selectOption('field:company');
   await expect(search).toHaveAttribute('placeholder', 'Search company...');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
   await field.selectOption('summary');
-  await expect(page.getByText('No matching tickets', { exact: true })).toBeVisible();
+  await expect(page.getByText('No matching records', { exact: true })).toBeVisible();
 });
 
 test('exports the filtered hierarchy as CSV and JSON', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-100');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('PM-100');
   const csvDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const csv = await csvDownload;
-  expect(csv.suggestedFilename()).toBe('jira-pm-100.csv');
+  expect(csv.suggestedFilename()).toBe('hierarchy-pm-100.csv');
   const csvStream = await csv.createReadStream();
   let csvBody = '';
   for await (const chunk of csvStream!) { csvBody += chunk.toString(); }
@@ -132,7 +134,7 @@ test('exports the filtered hierarchy as CSV and JSON', async ({ page }) => {
   const jsonDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
   const json = await jsonDownload;
-  expect(json.suggestedFilename()).toBe('jira-pm-100.json');
+  expect(json.suggestedFilename()).toBe('hierarchy-pm-100.json');
   const jsonStream = await json.createReadStream();
   let jsonBody = '';
   for await (const chunk of jsonStream!) { jsonBody += chunk.toString(); }
@@ -142,34 +144,34 @@ test('exports the filtered hierarchy as CSV and JSON', async ({ page }) => {
   expect(records.some((record) => record.project_key === 'REL')).toBe(true);
 });
 
-test('searches only the selected issue field', async ({ page }) => {
+test('searches only the selected record field', async ({ page }) => {
   const field = page.getByRole('combobox', { name: 'Search field' });
-  const search = page.getByRole('textbox', { name: 'Search tickets' });
+  const search = page.getByRole('textbox', { name: 'Search records' });
   await field.selectOption('key');
   await search.fill('Demo reopened issue');
-  await expect(page.getByTestId('issue-count')).toContainText('0 tickets / 0 rows');
+  await expect(page.getByTestId('issue-count')).toContainText('0 records / 0 rows');
   await field.selectOption('summary');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
   await expect(page.getByRole('treegrid')).toContainText('Demo reopened issue');
 });
 
 test('virtualizes thousands of rows, scrolls to the end, and keeps matching ancestors', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
-  await expect(page.getByTestId('issue-count')).toContainText('3,757 tickets');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('PM-300');
+  await expect(page.getByTestId('issue-count')).toContainText('3,757 records');
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   await expect(page.getByRole('treegrid')).toHaveAttribute('aria-rowcount', '3757');
-  expect(await page.getByTestId('jira-row').count()).toBeLessThan(70);
-  await page.getByTestId('jira-viewport').evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  await expect(page.getByTestId('jira-row').last()).toHaveAttribute('aria-rowindex', '3757');
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Scale subtask 12.24.12');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 4 rows');
-  await expect(page.getByTestId('jira-row')).toHaveCount(4);
+  expect(await page.getByTestId('hierarchy-row').count()).toBeLessThan(70);
+  await page.getByTestId('hierarchy-viewport').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(page.getByTestId('hierarchy-row').last()).toHaveAttribute('aria-rowindex', '3757');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Scale subtask 12.24.12');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 4 rows');
+  await expect(page.getByTestId('hierarchy-row')).toHaveCount(4);
   await expect(page.getByRole('treegrid')).toContainText('Scale subtask 12.24.12');
-  await page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true }).screenshot({ path: 'test-results/hierarchy-search.png' });
+  await page.getByRole('region', { name: 'Hierarchy Timeline records', exact: true }).screenshot({ path: 'test-results/hierarchy-search.png' });
 });
 
 test('supports depth expansion, completed-branch collapse, and search navigation', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('PM-300');
   await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
   await expect(page.getByRole('treegrid')).toHaveAttribute('aria-rowcount', '1');
   await page.getByRole('spinbutton', { name: 'Expand through depth' }).fill('1');
@@ -178,7 +180,7 @@ test('supports depth expansion, completed-branch collapse, and search navigation
   await page.getByRole('button', { name: 'Collapse completed', exact: true }).click();
   await expect.poll(async () => Number(await page.getByRole('treegrid').getAttribute('aria-rowcount'))).toBeLessThan(3757);
 
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Scale subtask 12.24');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Scale subtask 12.24');
   await expect(page.getByRole('button', { name: 'Next search match' })).toBeEnabled();
   const matchCounter = page.getByRole('region', { name: 'Search result navigation' });
   await expect(matchCounter).toContainText('1/12');
@@ -188,21 +190,21 @@ test('supports depth expansion, completed-branch collapse, and search navigation
 });
 
 test('preserves scroll and search position across equivalent query refreshes', async ({ page }) => {
-  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
-  await expect(page.getByTestId('issue-count')).toContainText('62 tickets');
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
+  await page.goto('/d/hierarchy-timeline-dev/hierarchy-timeline-development');
+  await expect(page.getByTestId('issue-count')).toContainText('62 records');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('PM-300');
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
-  const viewport = page.getByTestId('jira-viewport');
+  const viewport = page.getByTestId('hierarchy-viewport');
   await viewport.evaluate((element) => { element.scrollTop = 3000; });
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(3000);
   await refreshDashboard(page);
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(3000);
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Scale subtask');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Scale subtask');
   const navigation = page.getByRole('region', { name: 'Search result navigation' });
   await expect(navigation).toContainText('1/3456');
   await page.getByRole('button', { name: 'Next search match' }).click();
   await expect(navigation).toContainText('2/3456');
-  await page.getByRole('button', { name: 'Close ticket details' }).click();
+  await page.getByRole('button', { name: 'Close record details' }).click();
   await viewport.evaluate((element) => { element.scrollTop = 3000; });
   await refreshDashboard(page);
   await expect(navigation).toContainText('2/3456');
@@ -212,34 +214,34 @@ test('preserves scroll and search position across equivalent query refreshes', a
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
-test('contains short narrow panels and scrolls chrome, warnings, tickets and footer into view', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('');
+test('contains short narrow panels and scrolls chrome, warnings, records and footer into view', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('');
   await expect(page.getByRole('status')).toContainText('missing or cyclic');
-  const panel = page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true });
+  const panel = page.getByRole('region', { name: 'Hierarchy Timeline records', exact: true });
   await panel.evaluate((element) => { element.style.width = '390px'; element.style.height = '300px'; });
-  const scroller = page.getByTestId('jira-panel-scroll');
+  const scroller = page.getByTestId('hierarchy-panel-scroll');
   expect(await scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   const panelBox = (await panel.boundingBox())!;
   const scrollBox = (await scroller.boundingBox())!;
   expect(scrollBox.y + scrollBox.height).toBeLessThanOrEqual(panelBox.y + 300);
-  for (const control of [page.getByRole('textbox', { name: 'Search tickets' }), page.getByRole('button', { name: 'Fit tickets', exact: true }), page.getByRole('status'), page.getByTestId('jira-viewport'), page.getByText('Actual Jira parents / observed lifetimes, not planned schedules', { exact: true })]) {
+  for (const control of [page.getByRole('textbox', { name: 'Search records' }), page.getByRole('button', { name: 'Fit records', exact: true }), page.getByRole('status'), page.getByTestId('hierarchy-viewport'), page.getByText('Record parents / observed lifetimes, not planned schedules', { exact: true })]) {
     await control.scrollIntoViewIfNeeded();
     await expect(control).toBeInViewport();
   }
-  const viewport = page.getByTestId('jira-viewport');
+  const viewport = page.getByTestId('hierarchy-viewport');
   expect(await viewport.evaluate((element) => element.clientHeight)).toBeGreaterThanOrEqual(60);
-  expect(await page.getByTestId('jira-row').count()).toBeLessThan(70);
-  await page.getByRole('button', { name: 'Fit tickets', exact: true }).click();
+  expect(await page.getByTestId('hierarchy-row').count()).toBeLessThan(70);
+  await page.getByRole('button', { name: 'Fit records', exact: true }).click();
   await viewport.scrollIntoViewIfNeeded();
-  await page.getByTestId('jira-row').first().getByRole('button').nth(1).click();
+  await page.getByTestId('hierarchy-row').first().getByRole('button').nth(1).click();
   const details = page.getByRole('complementary');
   await expect(details).toBeInViewport();
-  await expect(page.getByRole('button', { name: 'Close ticket details' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Close record details' })).toBeFocused();
 });
 
 test('moves keyboard focus into details and restores the latest trigger or virtualized viewport', async ({ page }) => {
   const trigger = page.getByRole('button', { name: 'Details for PM-100', exact: true });
-  const close = page.getByRole('button', { name: 'Close ticket details' });
+  const close = page.getByRole('button', { name: 'Close record details' });
   await trigger.focus();
   await trigger.press('Enter');
   await expect(close).toBeFocused();
@@ -250,21 +252,21 @@ test('moves keyboard focus into details and restores the latest trigger or virtu
   await close.click();
   await expect(trigger).toBeFocused();
   await trigger.click();
-  const nextRow = page.getByTestId('jira-row').nth(1);
+  const nextRow = page.getByTestId('hierarchy-row').nth(1);
   const nextKey = await nextRow.getAttribute('data-issue-key');
   const nextTrigger = nextRow.getByRole('gridcell').first().getByRole('button').last();
   await nextTrigger.click();
-  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', `Ticket details ${nextKey}`);
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', `Record details ${nextKey}`);
   await expect(close).toBeFocused();
   await close.click();
   await expect(nextTrigger).toBeFocused();
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('PM-300');
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   const scaleTrigger = page.getByRole('button', { name: 'Details for PM-300', exact: true });
   await scaleTrigger.focus();
   await scaleTrigger.press('Enter');
   await expect(close).toBeFocused();
-  const viewport = page.getByTestId('jira-viewport');
+  const viewport = page.getByTestId('hierarchy-viewport');
   await viewport.evaluate((element) => { element.scrollTop = 3000; });
   await expect(scaleTrigger).toHaveCount(0);
   await close.press('Escape');
@@ -272,16 +274,16 @@ test('moves keyboard focus into details and restores the latest trigger or virtu
 });
 
 test('restores keyboard focus after focusing a subtree', async ({ page }) => {
-  const row = page.getByTestId('jira-row').filter({ hasText: 'OPS-900003' });
+  const row = page.getByTestId('hierarchy-row').filter({ hasText: 'OPS-900003' });
   const trigger = row.getByRole('gridcell').first().getByRole('button').last();
   await trigger.focus();
   await trigger.press('Enter');
   const focusSubtree = page.getByRole('button', { name: 'Focus subtree', exact: true });
-  await page.getByRole('button', { name: 'Close ticket details' }).press('Tab');
+  await page.getByRole('button', { name: 'Close record details' }).press('Tab');
   await expect(focusSubtree).toBeFocused();
   await focusSubtree.press('Enter');
   await expect(page.getByRole('complementary')).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Parent ticket', exact: true })).toHaveValue('OPS-900003');
+  await expect(page.getByRole('textbox', { name: 'Parent record', exact: true })).toHaveValue('OPS-900003');
   await expect(trigger).toBeFocused();
 });
 
@@ -290,12 +292,12 @@ test('restores focus when a refreshed query removes details without stealing out
   let keys = ['OPS-1', 'OPS-2'];
   let holdRefresh = false;
   let releaseResponse: (() => void) | undefined;
-  await mockTickets(page, () => keys, async () => {
+  await mockRecords(page, () => keys, async () => {
     if (holdRefresh) { await new Promise<void>((resolve) => { releaseResponse = resolve; }); }
   });
-  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
-  await expect(page.getByTestId('issue-count')).toContainText('2 tickets');
-  const close = page.getByRole('button', { name: 'Close ticket details' });
+  await page.goto('/d/hierarchy-timeline-dev/hierarchy-timeline-development');
+  await expect(page.getByTestId('issue-count')).toContainText('2 records');
+  const close = page.getByRole('button', { name: 'Close record details' });
   const refreshWithFocus = async (focus: ReturnType<Page['getByRole']>) => {
     holdRefresh = true;
     releaseResponse = undefined;
@@ -310,7 +312,7 @@ test('restores focus when a refreshed query removes details without stealing out
   await expect(close).toBeFocused();
   keys = ['OPS-2'];
   await refreshWithFocus(close);
-  await expect(page.getByTestId('jira-viewport')).toBeFocused();
+  await expect(page.getByTestId('hierarchy-viewport')).toBeFocused();
   await page.getByRole('button', { name: 'Details for OPS-2', exact: true }).press('Enter');
   await expect(close).toBeFocused();
   keys = ['OPS-3'];
@@ -320,7 +322,7 @@ test('restores focus when a refreshed query removes details without stealing out
   await page.getByRole('button', { name: 'Details for OPS-3', exact: true }).press('Enter');
   await expect(close).toBeFocused();
   keys = ['OPS-4'];
-  const search = page.getByRole('textbox', { name: 'Search tickets' });
+  const search = page.getByRole('textbox', { name: 'Search records' });
   await refreshWithFocus(search);
   await expect(search).toBeFocused();
 });
@@ -328,19 +330,19 @@ test('restores focus when a refreshed query removes details without stealing out
 test('reconciles search position by identity and bounds it as refreshed matches change', async ({ page }) => {
   await configurePanel(page, { rootKey: '' });
   let keys = ['OPS-1', 'OPS-2', 'OPS-3'];
-  await mockTickets(page, () => keys);
-  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
-  await expect(page.getByTestId('issue-count')).toContainText('3 tickets');
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Matching');
+  await mockRecords(page, () => keys);
+  await page.goto('/d/hierarchy-timeline-dev/hierarchy-timeline-development');
+  await expect(page.getByTestId('issue-count')).toContainText('3 records');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Matching');
   const navigation = page.getByRole('region', { name: 'Search result navigation' });
   const next = page.getByRole('button', { name: 'Next search match' });
-  const close = page.getByRole('button', { name: 'Close ticket details' });
+  const close = page.getByRole('button', { name: 'Close record details' });
   await expect(navigation).toContainText('1/3');
   await next.click();
   await close.click();
   await next.click();
   await expect(navigation).toContainText('3/3');
-  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Ticket details OPS-3');
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Record details OPS-3');
   await close.click();
   keys = ['OPS-0', 'OPS-1', 'OPS-2', 'OPS-3'];
   await refreshDashboard(page);
@@ -353,7 +355,7 @@ test('reconciles search position by identity and bounds it as refreshed matches 
   await expect(navigation).toContainText('1/2');
   await next.click();
   await expect(navigation).toContainText('2/2');
-  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Ticket details OPS-6');
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Record details OPS-6');
   await close.click();
   keys = [];
   await refreshDashboard(page);
@@ -364,27 +366,27 @@ test('reconciles search position by identity and bounds it as refreshed matches 
   await expect(navigation).toContainText('1/1');
 });
 
-test('filters projects across roots without dropping ancestor context and surfaces orphan data', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('');
-  await expect(page.getByTestId('issue-count')).toContainText('3,832 tickets');
+test('filters groups across roots without dropping ancestor context and surfaces orphan data', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('');
+  await expect(page.getByTestId('issue-count')).toContainText('3,832 records');
   await expect(page.getByRole('status')).toContainText('missing or cyclic');
-  await page.getByText('Projects (all)', { exact: true }).click();
+  await page.getByText('Groups (all)', { exact: true }).click();
   await page.getByRole('checkbox', { name: 'REL', exact: true }).check();
-  await page.getByText('Projects (1)', { exact: true }).click();
+  await page.getByText('Groups (1)', { exact: true }).click();
   await expect(page.getByRole('treegrid')).toContainText('PM-100');
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Demo child of orphan');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Demo child of orphan');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
   await expect(page.getByRole('treegrid')).toContainText('OPS-900001');
 });
 
-test('renders on mobile with horizontal scrolling and usable ticket details', async ({ page }) => {
+test('renders on mobile with horizontal scrolling and usable record details', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('textbox', { name: 'Search tickets' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Demo reopened issue');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 2 rows');
-  const viewport = page.getByTestId('jira-viewport');
+  await expect(page.getByRole('textbox', { name: 'Search records' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Demo reopened issue');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 2 rows');
+  const viewport = page.getByTestId('hierarchy-viewport');
   expect(await viewport.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await page.getByTestId('jira-row').filter({ hasText: 'OPS-900003' }).getByRole('button', { name: /OPS-900003.*Demo reopened issue/ }).click();
+  await page.getByTestId('hierarchy-row').filter({ hasText: 'OPS-900003' }).getByRole('button', { name: /OPS-900003.*Demo reopened issue/ }).click();
   await expect(page.getByRole('complementary')).toBeVisible();
   const box = await page.getByRole('complementary').boundingBox();
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
@@ -392,23 +394,23 @@ test('renders on mobile with horizontal scrolling and usable ticket details', as
 });
 
 test('matches Grafana light theme and supports local zoom without query changes', async ({ page }) => {
-  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development?kiosk&theme=light');
-  await expect(page.getByTestId('issue-count')).toContainText('62 tickets');
+  await page.goto('/d/hierarchy-timeline-dev/hierarchy-timeline-development?kiosk&theme=light');
+  await expect(page.getByTestId('issue-count')).toContainText('62 records');
   let queries = 0;
   page.on('request', (request) => { if (request.url().includes('/api/ds/query')) { queries++; } });
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.getByRole('button', { name: 'Pan later', exact: true }).click();
-  await page.getByRole('button', { name: 'Fit tickets', exact: true }).click();
+  await page.getByRole('button', { name: 'Fit records', exact: true }).click();
   expect(queries).toBe(0);
-  await page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true }).screenshot({ path: 'test-results/hierarchy-light.png' });
+  await page.getByRole('region', { name: 'Hierarchy Timeline records', exact: true }).screenshot({ path: 'test-results/hierarchy-light.png' });
 });
 
 test('handles an absent root and returns to the full dataset', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('MISSING-123');
-  await expect(page.getByText('No matching tickets', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('jira-row')).toHaveCount(0);
-  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('');
-  await expect(page.getByTestId('issue-count')).toContainText('3,832 tickets');
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('MISSING-123');
+  await expect(page.getByText('No matching records', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('hierarchy-row')).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Parent record', exact: true }).fill('');
+  await expect(page.getByTestId('issue-count')).toContainText('3,832 records');
 });
 
 test('renders a datasource-neutral table and isolates malformed query rows', async ({ page }) => {
@@ -421,20 +423,20 @@ test('renders a datasource-neutral table and isolates malformed query rows', asy
     data: { values: [
       ['PM-100', 'BAD-1'], [Date.UTC(2026, 8, 1), Date.UTC(2026, 8, 1)],
       [Date.UTC(2026, 8, 15), Date.UTC(2026, 8, 15)], [false, false],
-      ['<script>alert(1)</script> Plain table ticket', { toString: null }], ['Acme', 'Invalid'],
+      ['<script>alert(1)</script> Plain table record', { toString: null }], ['Acme', 'Invalid'],
     ] },
   }] } } } }));
   await page.reload();
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 1 rows');
-  await expect(page.getByRole('treegrid')).toContainText('<script>alert(1)</script> Plain table ticket');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 1 rows');
+  await expect(page.getByRole('treegrid')).toContainText('<script>alert(1)</script> Plain table record');
   await expect(page.getByRole('status')).toContainText('1 invalid row(s) excluded');
   await page.getByRole('combobox', { name: 'Search field' }).selectOption('field:company');
-  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Acme');
-  await expect(page.getByTestId('issue-count')).toContainText('1 tickets / 1 rows');
+  await page.getByRole('textbox', { name: 'Search records' }).fill('Acme');
+  await expect(page.getByTestId('issue-count')).toContainText('1 records / 1 rows');
   await page.getByRole('button', { name: 'Details for PM-100', exact: true }).click();
   await expect(page.getByRole('complementary')).toContainText('Unspecified');
   await expect(page.getByRole('complementary').getByLabel('Additional fields')).toContainText('Acme');
-  await page.getByRole('button', { name: 'Close ticket details' }).click();
+  await page.getByRole('button', { name: 'Close record details' }).click();
   await page.getByText('Validation details (1 of 1 excluded rows)', { exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Query A, frame 1, row 2, BAD-1: summary');
   await expect(page.getByRole('status')).toContainText('Expected a string or null');
@@ -442,7 +444,7 @@ test('renders a datasource-neutral table and isolates malformed query rows', asy
 
 test('uses mapped fields, source identity, native field overrides, data links and undirected relationships', async ({ page }) => {
   await configurePanel(page, {
-    fieldMappings: { key: 'id', parent: 'belongsTo', summary: 'title', created: 'opened', observed: 'observedAt', resolved: 'finished', isResolved: 'closed', links: 'relations' },
+    fieldMappings: { key: 'id', parent: 'belongsTo', project: 'workspace', summary: 'title', created: 'opened', observed: 'observedAt', resolved: 'finished', isResolved: 'closed', links: 'relations' },
     sourceFields: 'site', metadataFields: 'effort', colorField: 'effort', collapseMode: 'subtree',
   }, [
     { matcher: { id: 'byName', options: 'effort' }, properties: [
@@ -459,7 +461,7 @@ test('uses mapped fields, source identity, native field overrides, data links an
       { name: 'id', type: 'string' }, { name: 'title', type: 'string' }, { name: 'belongsTo', type: 'string' },
       { name: 'opened', type: 'time' }, { name: 'observedAt', type: 'time' }, { name: 'finished', type: 'time' },
       { name: 'closed', type: 'boolean' }, { name: 'site', type: 'string' }, { name: 'effort', type: 'number' },
-      { name: 'url', type: 'string' }, { name: 'relations', type: 'other' },
+      { name: 'url', type: 'string' }, { name: 'relations', type: 'other' }, { name: 'workspace', type: 'string' },
     ] },
     data: { values: [
       ['PM-100', 'OPS-1', 'PM-100', 'OPS-1'], ['East program', 'East task', 'West program', 'West task'], [null, 'PM-100', null, 'PM-100'],
@@ -467,24 +469,26 @@ test('uses mapped fields, source identity, native field overrides, data links an
       [false, false, true, false], ['east', 'east', 'west', 'west'], [5, 2.5, 4, 1.5],
       ['https://east.example/issues/PM-100', 'https://east.example/issues/OPS-1', 'https://west.example/issues/PM-100', 'https://west.example/issues/OPS-1'],
       [[{ target_key: 'OPS-1', type: 'related', direction: 'undirected' }], [], [], []],
+      ['Program', 'Delivery', 'Program', 'Delivery'],
     ] },
   }] } } } }));
   await page.reload();
-  await expect(page.getByTestId('issue-count')).toContainText('4 tickets / 4 rows');
+  await expect(page.getByTestId('issue-count')).toContainText('4 records / 4 rows');
   await page.getByRole('button', { name: 'Collapse completed', exact: true }).click();
   await expect(page.getByRole('treegrid')).toHaveAttribute('aria-rowcount', '4');
   const relationship = page.getByTestId('relationship-arrow');
   await expect(relationship).toHaveCount(1);
   await expect(relationship).toHaveAttribute('data-directed', 'false');
   expect(await relationship.locator('path').getAttribute('marker-end')).toBeNull();
-  const west = page.getByTestId('jira-row').filter({ hasText: 'West task' });
+  const west = page.getByTestId('hierarchy-row').filter({ hasText: 'West task' });
   await expect(west.getByRole('button', { name: 'Details for OPS-1', exact: true })).toHaveCSS('background-color', 'rgb(18, 52, 86)');
   await west.getByRole('button', { name: 'Details for OPS-1', exact: true }).click();
-  const details = page.getByRole('complementary', { name: 'Ticket details OPS-1' });
+  const details = page.getByRole('complementary', { name: 'Record details OPS-1' });
+  await expect(details.locator('dl').first()).toContainText('GroupDelivery');
   await expect(details.getByRole('link', { name: 'Open source' })).toHaveAttribute('href', 'https://west.example/issues/OPS-1');
   await expect(details.getByLabel('Additional fields')).toContainText('Effort estimate');
   await expect(details.getByLabel('Additional fields')).toContainText('1.5 h');
-  await page.getByRole('button', { name: 'Close ticket details' }).click();
+  await page.getByRole('button', { name: 'Close record details' }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
   const stream = await (await download).createReadStream();
@@ -494,21 +498,21 @@ test('uses mapped fields, source identity, native field overrides, data links an
 });
 
 test('uses per-row URLs from labels and avoids falling back to a different site', async ({ page }) => {
-  await configurePanel(page, { issueUrlField: 'ticket_url', sourceFields: 'site' });
+  await configurePanel(page, { issueUrlField: 'record_url', sourceFields: 'site' });
   const now = Date.now();
   await page.route('**/api/ds/query*', (route) => route.fulfill({ json: { results: { A: { status: 200, frames: [{
     schema: { refId: 'A', fields: [{ name: 'labels', type: 'other' }] },
     data: { values: [[
-      { issue_key: 'PM-100', summary: 'East program', site: 'east', created_at: now - 86400000, sync_ts: now, is_resolved: false, ticket_url: 'https://east.example/PM-100' },
-      { issue_key: 'PM-100', summary: 'West program', site: 'west', created_at: now - 86400000, sync_ts: now, is_resolved: false, ticket_url: 'javascript:alert(1)' },
+      { issue_key: 'PM-100', summary: 'East program', site: 'east', created_at: now - 86400000, sync_ts: now, is_resolved: false, record_url: 'https://east.example/PM-100' },
+      { issue_key: 'PM-100', summary: 'West program', site: 'west', created_at: now - 86400000, sync_ts: now, is_resolved: false, record_url: 'javascript:alert(1)' },
     ]] },
   }] } } } }));
   await page.reload();
-  await expect(page.getByTestId('issue-count')).toContainText('2 tickets / 2 rows');
-  await page.getByTestId('jira-row').filter({ hasText: 'East program' }).getByRole('button', { name: 'Details for PM-100', exact: true }).click();
-  await expect(page.getByRole('complementary').getByRole('link', { name: 'Open ticket' })).toHaveAttribute('href', 'https://east.example/PM-100');
-  await page.getByRole('button', { name: 'Close ticket details' }).click();
-  await page.getByTestId('jira-row').filter({ hasText: 'West program' }).getByRole('button', { name: 'Details for PM-100', exact: true }).click();
-  await expect(page.getByRole('complementary')).toContainText('Ticket URL field ticket_url is missing or invalid');
+  await expect(page.getByTestId('issue-count')).toContainText('2 records / 2 rows');
+  await page.getByTestId('hierarchy-row').filter({ hasText: 'East program' }).getByRole('button', { name: 'Details for PM-100', exact: true }).click();
+  await expect(page.getByRole('complementary').getByRole('link', { name: 'Open record' })).toHaveAttribute('href', 'https://east.example/PM-100');
+  await page.getByRole('button', { name: 'Close record details' }).click();
+  await page.getByTestId('hierarchy-row').filter({ hasText: 'West program' }).getByRole('button', { name: 'Details for PM-100', exact: true }).click();
+  await expect(page.getByRole('complementary')).toContainText('Record URL field record_url is missing or invalid');
   await expect(page.getByRole('complementary').getByRole('link')).toHaveCount(0);
 });

@@ -1,12 +1,12 @@
 import type { DataFrame } from '@grafana/data';
-import { defaultFieldMappings, type Issue, type IssueFieldMapping, type IssueLink, type JiraOptions, type MetadataValue, type RowOrigin, type SearchFieldOption, type ValidationDiagnostic } from './types';
+import { defaultFieldMappings, type Issue, type IssueFieldMapping, type IssueLink, type HierarchyTimelineOptions, type MetadataValue, type RowOrigin, type SearchFieldOption, type ValidationDiagnostic } from './types';
 
 const coreSearchFields = [
   { value: 'key', mapping: 'key', label: 'Key' },
   { value: 'summary', mapping: 'summary', label: 'Summary' },
   { value: 'status', mapping: 'status', label: 'Status' },
   { value: 'assignee', mapping: 'assignee', label: 'Assignee' },
-  { value: 'type', mapping: 'type', label: 'Issue type' },
+  { value: 'type', mapping: 'type', label: 'Type' },
 ] as const;
 const structuralFields = [
   'app', 'instance', 'environment', 'kind', 'parent_key', 'issue_links',
@@ -127,7 +127,7 @@ function readLinks(value: unknown, field: string): { links: IssueLink[]; error?:
   return { links };
 }
 
-export function readIssues(frames: DataFrame[], maxIssues: number, options: Partial<Pick<JiraOptions, 'fieldMappings' | 'sourceFields'>> = {}) {
+export function readIssues(frames: DataFrame[], maxIssues: number, options: Partial<Pick<HierarchyTimelineOptions, 'fieldMappings' | 'sourceFields'>> = {}) {
   const fields = resolveFieldMappings(options.fieldMappings);
   const explicitSources = fieldNames(options.sourceFields);
   const sources = explicitSources.length ? explicitSources : ['app', 'instance', 'environment'];
@@ -162,7 +162,7 @@ export function readIssues(frames: DataFrame[], maxIssues: number, options: Part
       const invalidSource = sources.find((name) => explicitSources.length
         ? typeof row[name] !== 'string' || !row[name].trim()
         : row[name] != null && typeof row[name] !== 'string');
-      const error = !key ? { field: fields.key, reason: 'Expected a nonempty issue key string' }
+      const error = !key ? { field: fields.key, reason: 'Expected a nonempty record key string' }
         : !Number.isFinite(observed) ? { field: observationField, reason: 'Expected a valid observation timestamp' }
           : invalidSource ? { field: invalidSource, reason: explicitSources.length ? 'Configured source fields require nonempty strings' : 'Expected a source string' }
             : undefined;
@@ -185,8 +185,8 @@ export function readIssues(frames: DataFrame[], maxIssues: number, options: Part
     const invalidText = textMappings.map((key) => fields[key]).find((name) => row[name] != null && typeof row[name] !== 'string');
     const error = !hasResolutionFlag ? { field: fields.isResolved, reason: 'Expected true or false (boolean or string)' }
       : !Number.isFinite(start) ? { field: fields.created, reason: 'Expected a valid creation timestamp' }
-        : !Number.isFinite(end) ? { field: fields.resolved, reason: 'Resolved issues require a valid resolution timestamp' }
-          : end < start ? { field: fields.created, reason: 'Creation must not be later than the issue end' }
+        : !Number.isFinite(end) ? { field: fields.resolved, reason: 'Resolved records require a valid resolution timestamp' }
+          : end < start ? { field: fields.created, reason: 'Creation must not be later than the record end' }
             : end > observed ? { field: fields.resolved, reason: 'Resolution must not be later than the observation' }
               : invalidText ? { field: invalidText, reason: 'Expected a string or null' } : linkError;
     if (error) { reject(origin, key, error); continue; }

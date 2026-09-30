@@ -9,7 +9,7 @@ export function isQueryFailure(state: string, hasErrors: boolean): boolean {
 }
 
 export function getQueryErrorEmptyMessage(hasIssues: boolean, hasErrorMessage: boolean): string {
-  const failure = hasErrorMessage ? 'The query returned no usable tickets.' : 'The query failed without providing an error message.';
+  const failure = hasErrorMessage ? 'The query returned no usable records.' : 'The query failed without providing an error message.';
   return hasIssues
     ? `${failure} Check the query and datasource; displayed rows may be partial or stale, and exports reflect the data currently shown.`
     : `${failure} Check the query and datasource. Exports reflect the data currently shown.`;

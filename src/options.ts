@@ -1,9 +1,9 @@
-import { defaults, defaultFieldMappings, type CollapseMode, type JiraOptions } from './types';
+import { defaults, defaultFieldMappings, type CollapseMode, type HierarchyTimelineOptions } from './types';
 
 const stringOptions = [
   'rootKey', 'jiraBaseUrl', 'searchableFields', 'sourceFields', 'metadataFields', 'issueUrlField', 'colorField',
 ] as const;
-const normalizedByInput = new WeakMap<object, JiraOptions>();
+const normalizedByInput = new WeakMap<object, HierarchyTimelineOptions>();
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) { return false; }
@@ -11,17 +11,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function buildNormalizedOptions(raw: Record<string, unknown>): JiraOptions {
+function buildNormalizedOptions(raw: Record<string, unknown>): HierarchyTimelineOptions {
   const strings = Object.fromEntries(stringOptions.map((key) => [key,
     typeof raw[key] === 'string' ? raw[key] : defaults[key],
-  ])) as Pick<JiraOptions, typeof stringOptions[number]>;
+  ])) as Pick<HierarchyTimelineOptions, typeof stringOptions[number]>;
   const rawMappings = isPlainObject(raw.fieldMappings) ? raw.fieldMappings : {};
   const fieldMappings = Object.fromEntries(
     Object.keys(defaultFieldMappings).flatMap((key) => typeof rawMappings[key] === 'string' ? [[key, rawMappings[key]]] : []),
-  ) as JiraOptions['fieldMappings'];
+  ) as HierarchyTimelineOptions['fieldMappings'];
   const collapseModes: CollapseMode[] = ['parent-or-descendants', 'parent', 'subtree'];
 
-  const normalized: JiraOptions = {
+  const normalized: HierarchyTimelineOptions = {
     ...defaults,
     ...strings,
     fieldMappings,
@@ -38,7 +38,7 @@ function buildNormalizedOptions(raw: Record<string, unknown>): JiraOptions {
 const fallbackOptions = buildNormalizedOptions({});
 
 /** Grafana treats panel options as immutable and supplies a new object when an option changes. */
-export function normalizeOptions(value: unknown): JiraOptions {
+export function normalizeOptions(value: unknown): HierarchyTimelineOptions {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) { return fallbackOptions; }
   const cached = normalizedByInput.get(value);
   if (cached) { return cached; }

@@ -2,7 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: Jira Development Logs
-    uid: jira-dev-logs
+    uid: hierarchy-timeline-dev-logs
     type: victoriametrics-logs-datasource
     access: proxy
     url: http://victorialogs:9428

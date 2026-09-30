@@ -1,4 +1,4 @@
-export interface JiraOptions {
+export interface HierarchyTimelineOptions {
   rootKey: string;
   initialDepth: number;
   staleHours: number;
@@ -48,7 +48,7 @@ export interface SearchFieldOption {
   label: string;
 }
 
-export const defaults: JiraOptions = {
+export const defaults: HierarchyTimelineOptions = {
   rootKey: '', initialDepth: 2, staleHours: 24, jiraBaseUrl: '',
   maxIssues: 10000, rowHeight: 36, labelWidth: 420, searchableFields: '',
   fieldMappings: {}, sourceFields: '', metadataFields: '', issueUrlField: '', colorField: '',

@@ -1,15 +1,26 @@
-# Isolated Panel Development
+# Isolated Hierarchy Timeline Development
 
 **DEVELOPMENT ONLY: Grafana allows anonymous viewing and uses a fixed local admin. Both published ports
 must remain bound to loopback. Never expose this stack through a reverse proxy,
 tunnel, or public interface. Any local user can administer it.**
 
-This is a separate Compose project, `jira-panel-dev`, with its own default network
+This is a separate Compose project, `hierarchy-timeline-dev`, with its own default network
 and named volumes. It has only Grafana and VictoriaLogs: no Jira access, external
 datasources, shared storage, repository `.env`, or secret mounts. The
 only expected external connection is downloading the pinned signed datasource
 plugin at initial Grafana startup. Images must also be available locally or pulled.
 Restart policies are disabled.
+
+The renamed project starts with fresh development volumes. Before starting it,
+stop the old project to free the same loopback ports (its volumes are preserved):
+
+```sh
+docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml down
+```
+
+The new dashboard and fixture source are provisioned together; do not point the
+new project at old volumes or mix its datasource UID with an old dashboard.
+To migrate an existing dashboard instead, see the [plugin ID migration](../README.md#migration-from-jira-hierarchy).
 
 ## Commands
 
@@ -19,25 +30,34 @@ file, project name, and empty environment file. Do not load repository environme
 files or combine with other Compose projects.
 
 ```sh
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml config
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml up -d --wait
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml config
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml up -d --wait
 node dev/seed.mjs
 ```
 
-Open <http://127.0.0.1:3300/d/jira-hierarchy-dev>. The provisioned folder is
-`Operations` (`jira-panel-dev-operations`). No login is needed. The deliberately
-non-secret local bootstrap account is `jira-panel-dev` /
-`jira-panel-development-only`; use it to edit panel options. Anonymous access is Viewer.
+With rootless Podman, use `podman-compose` in place of `docker compose`. If your
+Compose implementation lacks `--wait`, start and wait for Grafana explicitly:
+
+```sh
+podman-compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml up -d
+podman wait --condition=healthy hierarchy-timeline-dev_grafana_1
+node dev/seed.mjs
+```
+
+Open <http://127.0.0.1:3300/d/hierarchy-timeline-dev>. The provisioned folder is
+`Operations` (`hierarchy-timeline-dev-operations`). No login is needed. The deliberately
+non-secret local bootstrap account is `hierarchy-timeline-dev` /
+`hierarchy-timeline-development-only`; use it to edit panel options. Anonymous access is Viewer.
 Host `GF_SECURITY_ADMIN_*` variables are not passed through to the container.
-Only `imithrellas-jira-panel` is allowed to load unsigned.
+Only `imithrellas-hierarchy-panel` is allowed to load unsigned.
 
 After code changes, rebuild and restart Grafana so it reads the new bundle-specific
 plugin version, then reload the browser page (not just Grafana's **Refresh** button):
 
 ```sh
 npm run build
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml restart grafana
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml up -d --wait
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml restart grafana
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml up -d --wait
 ```
 
 No reseeding is needed for code-only changes. The current UI includes **Depth**,
@@ -47,7 +67,7 @@ No reseeding is needed for code-only changes. The current UI includes **Depth**,
 Custom loopback ports (set both Compose's logs port and the seeder URL explicitly):
 
 ```sh
-PANEL_GRAFANA_PORT=3301 PANEL_LOGS_PORT=19429 docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml up -d --wait
+PANEL_GRAFANA_PORT=3301 PANEL_LOGS_PORT=19429 docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml up -d --wait
 VL_DEV_URL=http://127.0.0.1:19429 node dev/seed.mjs
 ```
 
@@ -65,7 +85,7 @@ node dev/seed.mjs --dry-run
 Stop just this project, preserving its seed data:
 
 ```sh
-docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml down
+docker compose --env-file /dev/null -p hierarchy-timeline-dev -f docker-compose.dev.yml down
 ```
 
 For a clean fixture reset, append `--volumes` to that command. This deletes only
@@ -74,9 +94,13 @@ and seed again. Other Compose projects are unaffected.
 
 ## Fixtures
 
+The included dataset intentionally uses Jira-style keys, types and default field
+names. The panel itself accepts other schemas through field mappings; see the
+[generic record example](../README.md#field-and-source-mapping).
+
 The dependency-free Node 22 script uses native `fetch` to post batches of 500
 NDJSON observations to `/insert/jsonline`. All records use stream fields
-`app=jira-panel-fixture`, `instance=demo`, `environment=development`. All names and
+`app=hierarchy-timeline-fixture`, `instance=demo`, `environment=development`. All names and
 summaries are synthetic; Jira links use the reserved `jira.example.invalid` domain.
 
 - `PM-100`: 6 epics, 36 stories, 18 subtasks, and a reopened bug. Stories and subtasks span PM, OPS, and REL projects.
@@ -92,13 +116,13 @@ summaries are synthetic; Jira links use the reserved `jira.example.invalid` doma
 Keys, relationships, status choices, and relative dates are deterministic. Each
 run captures one current clock anchor; normal observations are one minute old and
 creation dates span the 180-day timeline. Re-running appends observations, not
-new issue identities. Latest-per-source-and-ticket selection deduplicates them.
+new record identities. Latest-per-source-and-record selection deduplicates them.
 Fresh data eventually becomes stale without re-seeding; there is no background
 data producer. Use a clean volume for exact reproducibility across runs separated by
 days, since a previously fresh observation may then outrank an intentionally old
 fixture revision.
 
-The normal dataset is below 10,000 issues. To exercise the cap warning without
+The normal dataset is below 10,000 records. To exercise the cap warning without
 creating a larger fixture, temporarily reduce panel `maxIssues` in the editor;
 provisioning remains at 10,000. Change `rootKey` to PM-200 or PM-300 to inspect the
 other trees. UI edits are temporary; persist intended changes in the JSON file.
@@ -106,7 +130,7 @@ other trees. UI edits are temporary; persist intended changes in the JSON file.
 ## Query And Schema
 
 The dashboard uses classic schema (`panels[]`, `schemaVersion: 39`). Its single panel is
-ID 1, type `imithrellas-jira-panel`, datasource UID `jira-dev-logs`. Options match the
+ID 1, type `imithrellas-hierarchy-panel`, datasource UID `hierarchy-timeline-dev-logs`. Options match the
 panel contract: `rootKey=PM-100`, `initialDepth=2`, `staleHours=24`,
 `jiraBaseUrl=https://jira.example.invalid`, `maxIssues=10000`, `rowHeight=36`,
 `labelWidth=420`.
@@ -133,7 +157,7 @@ The insertion request also supplies `_msg` as a copy of `summary`, leaving the
 mandatory `summary` field intact. The query retains all contract fields:
 
 ```text
-{app="jira-panel-fixture", instance="demo", environment="development"} kind:="issue_state"
+{app="hierarchy-timeline-fixture", instance="demo", environment="development"} kind:="issue_state"
 | stats by (app, instance, environment, issue_key) row_max(_time) as row
 | unpack_json from row
 | fields _time, sync_ts, kind, app, instance, environment, issue_key, project_key, summary, issue_type, parent_key, issue_links, created_at, resolved_at, is_resolved, status, status_category, priority, assignee, company
@@ -154,7 +178,7 @@ Target validation references:
 - [Pinned frontend](https://github.com/VictoriaMetrics/victorialogs-datasource/blob/v0.26.3/src/datasource.ts) and [backend](https://github.com/VictoriaMetrics/victorialogs-datasource/blob/v0.26.3/pkg/plugin/query.go): pass the explicit line limit through without a 10,000 clamp. The newer catalog release documents a 10,000 cap, so do not upgrade without checking sentinel behavior.
 
 The panel has `timeFrom: "30d"`, while the dashboard defaults to `now-180d` through
-`now`. The panel fits the fetched tickets' full lifetimes, independently of the
+`now`. The panel fits the fetched records' full lifetimes, independently of the
 observation query window. Its zoom and pan controls are local and do not requery.
 Grafana relative panel overrides do not apply when an absolute dashboard time
 range is selected; that absolute range then selects observations, not creation dates.

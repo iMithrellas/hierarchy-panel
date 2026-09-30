@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
   "type": "panel",
-  "name": "Jira Hierarchy",
-  "id": "imithrellas-jira-panel",
+  "name": "Hierarchy Timeline",
+  "id": "imithrellas-hierarchy-panel",
   "info": {
-    "description": "Explore Jira parent trees and observed ticket lifetimes, with virtualized rows and cross-project navigation.",
+    "description": "Explore record hierarchies, observed lifetimes and relationships from compatible Grafana DataFrames, with virtualized rows and cross-group navigation.",
     "author": { "name": "iMithrellas" },
-    "keywords": ["jira", "hierarchy", "gantt", "timeline", "victorialogs"],
+    "keywords": ["hierarchy", "timeline", "records", "relationships", "jira", "victorialogs"],
     "logos": { "small": "img/logo.svg", "large": "img/logo.svg" },
     "version": "%VERSION%",
     "updated": "%TODAY%",
     "screenshots": [
-      { "name": "Jira hierarchy timeline", "path": "img/screenshot-dark.png" },
+      { "name": "Hierarchy Timeline", "path": "img/screenshot-dark.png" },
       { "name": "Search and hierarchy filters", "path": "img/screenshot-search.png" }
     ],
     "links": [

@@ -20,6 +20,7 @@ describe('getQueryErrors', () => {
   });
 
   it('distinguishes empty results from partial results while cautioning about exports', () => {
+    expect(getQueryErrorEmptyMessage(false, true)).toContain('no usable records');
     expect(getQueryErrorEmptyMessage(false, true)).toContain('Exports reflect the data currently shown');
     const partial = getQueryErrorEmptyMessage(true, true);
     expect(partial).toContain('partial or stale');

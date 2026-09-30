@@ -20,7 +20,7 @@ def check(repository: str, tag: str, token: str) -> str:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "jira-panel-release-preflight",
+            "User-Agent": "hierarchy-timeline-release-preflight",
         },
     )
     try:

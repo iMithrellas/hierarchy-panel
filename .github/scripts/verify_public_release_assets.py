@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 
 def fetch(url: str) -> bytes:
-    request = Request(url, headers={"User-Agent": "jira-panel-release-verifier"})
+    request = Request(url, headers={"User-Agent": "hierarchy-timeline-release-verifier"})
     try:
         with urlopen(request, timeout=30) as response:
             return response.read()

@@ -30,8 +30,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: docker compose --env-file /dev/null -p jira-panel-ci -f docker-compose.dev.yml up -d --wait
+      - run: docker compose --env-file /dev/null -p hierarchy-timeline-ci -f docker-compose.dev.yml up -d --wait
       - run: npm run seed
       - run: npm run test:e2e
       - if: always()
-        run: docker compose --env-file /dev/null -p jira-panel-ci -f docker-compose.dev.yml down --volumes
+        run: docker compose --env-file /dev/null -p hierarchy-timeline-ci -f docker-compose.dev.yml down --volumes
