@@ -1,7 +1,7 @@
 import { css } from '@emotion/css';
 import { dateTimeFormat, type GrafanaTheme2, type PanelProps } from '@grafana/data';
 import { useStyles2, useTheme2 } from '@grafana/ui';
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { discoverSearchFields, readIssues } from './data';
 import { IssueDetails } from './IssueDetails';
 import { barPosition, buildRelationships, buildTree, collapseCompleted, computeRollups, expansionForDepth, exportRecords, fitRange, recordsToCsv, selectRows } from './model';
@@ -35,6 +35,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const [clock, setClock] = useState(Date.now());
   const [scroll, setScroll] = useState({ top: 0, left: 0, height: 400 });
   const viewport = useRef<HTMLDivElement>(null);
+  const detailsTrigger = useRef<HTMLButtonElement>();
   const arrowMarkerId = `jira-arrow-${useId().replaceAll(':', '')}`;
   const rowHeight = Math.round(clamp(options.rowHeight, defaults.rowHeight, 30, 60));
   const maxIssues = Math.round(clamp(options.maxIssues, defaults.maxIssues, 1, 50000));
@@ -56,6 +57,11 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const fittedRange = useMemo(() => fitRange(selection.issues), [selection.issues]);
   const range = rangeOverride ?? fittedRange;
   const selected = selectedID ? tree.nodes.get(selectedID)?.issue : undefined;
+  const restoreDetailsFocus = useCallback(() => {
+    const trigger = detailsTrigger.current;
+    if (trigger?.isConnected) { trigger.focus(); }
+    else { viewport.current?.focus(); }
+  }, []);
   const innerWidth = Math.max(760, width - 2);
   const labelWidth = Math.min(innerWidth * 0.55, clamp(options.labelWidth, defaults.labelWidth, 200, 700));
   const timelineWidth = innerWidth - labelWidth;
@@ -94,6 +100,9 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     setScroll(resetScrollTop);
     setMatchCursor(0);
   }, [root, rootSource, deferredSearch, projects, activeSearchField, searchFieldOptions]);
+  useEffect(() => {
+    if (selectedID && !selected) { setSelectedID(undefined); }
+  }, [selectedID, selected]);
   useEffect(() => {
     const element = viewport.current;
     if (!element) { return; }
@@ -195,12 +204,20 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   };
-  const jumpToMatch = (direction: number) => {
+  const openDetails = (id: string, trigger: HTMLButtonElement) => {
+    detailsTrigger.current = trigger;
+    setSelectedID(id);
+  };
+  const closeDetails = () => {
+    setSelectedID(undefined);
+    restoreDetailsFocus();
+  };
+  const jumpToMatch = (direction: number, trigger: HTMLButtonElement) => {
     if (!selection.matchingIds.length) { return; }
     const next = (matchCursor + direction + selection.matchingIds.length) % selection.matchingIds.length;
     const id = selection.matchingIds[next];
     setMatchCursor(next);
-    setSelectedID(id);
+    openDetails(id, trigger);
     const rowIndex = selection.rows.findIndex((row) => row.node.issue.id === id);
     if (rowIndex >= 0 && viewport.current) { viewport.current.scrollTop = rowIndex * rowHeight; }
   };
@@ -220,7 +237,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
 
   return (
     <section className={styles.panel} style={{ width, height }} aria-label="Jira hierarchy timeline" onKeyDown={(event) => {
-      if (event.key === 'Escape') { setSelectedID(undefined); }
+      if (event.key === 'Escape' && selected) { event.preventDefault(); event.stopPropagation(); closeDetails(); }
     }}>
       <div className={styles.toolbar}>
         <label className={styles.rootLabel}>Parent
@@ -245,9 +262,9 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
           </div>
         </details>
         {deferredSearch && <div className={styles.matchNav} role="region" aria-label="Search result navigation">
-          <button type="button" aria-label="Previous search match" disabled={!selection.matchingIds.length} onClick={() => jumpToMatch(-1)}>&lt;</button>
+          <button type="button" aria-label="Previous search match" disabled={!selection.matchingIds.length} onClick={(event) => jumpToMatch(-1, event.currentTarget)}>&lt;</button>
           <span>{selection.matchingIds.length ? `${matchCursor + 1}/${selection.matchingIds.length}` : '0 matches'}</span>
-          <button type="button" aria-label="Next search match" disabled={!selection.matchingIds.length} onClick={() => jumpToMatch(1)}>&gt;</button>
+          <button type="button" aria-label="Next search match" disabled={!selection.matchingIds.length} onClick={(event) => jumpToMatch(1, event.currentTarget)}>&gt;</button>
         </div>}
       </div>
       <div className={styles.controls}>
@@ -300,7 +317,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
           </div>
         </div>
       </div>
-      <div ref={viewport} className={styles.viewport} data-testid="jira-viewport" role="treegrid" aria-label="Jira tickets"
+      <div ref={viewport} className={styles.viewport} data-testid="jira-viewport" role="treegrid" aria-label="Jira tickets" tabIndex={0}
         onMouseMove={handleViewportMouseMove} onMouseLeave={() => setHoveredRelationship(undefined)}
         aria-rowcount={selection.rows.length} aria-colcount={2}
         onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft, height: event.currentTarget.clientHeight })}>
@@ -322,7 +339,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
               <div role="gridcell" className={styles.labelCell} style={{ width: labelWidth, paddingLeft: Math.min(depth, 12) * 16 + 8 }}>
                 <button className={styles.expander} type="button" disabled={!hasChildren || selection.filtering} aria-label={`${expanded ? 'Collapse' : 'Expand'} ${issue.key}`}
                   style={{ visibility: hasChildren ? 'visible' : 'hidden' }} onClick={() => toggle(issue.id, expanded)}>{expanded ? 'v' : '>'}</button>
-                <button type="button" className={styles.ticket} style={{ opacity: context ? 0.6 : 1 }} title={title} onClick={() => setSelectedID(issue.id)}>
+                <button type="button" className={styles.ticket} style={{ opacity: context ? 0.6 : 1 }} title={title} onClick={(event) => openDetails(issue.id, event.currentTarget)}>
                   <span className={styles.key}>{issue.key}</span><span className={styles.summary}>{summary || '(no summary)'}</span>
                   {!!rollup?.descendants && <span className={styles.rollup} data-testid="rollup-badge" title={`${rollup.descendants} descendants, ${rollup.doneDescendants} done, ${rollup.staleDescendants} stale`}>{rollup.descendants} children / {rollup.doneDescendants} done{rollup.staleDescendants ? ` / ${rollup.staleDescendants} stale` : ''}</span>}
                 </button>
@@ -330,7 +347,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
               </div>
               <div role="gridcell" className={styles.lane} style={{ width: timelineWidth }}>
                 {position ? <button type="button" aria-label={`Details for ${issue.key}`} title={title} className={styles.bar}
-                  onClick={() => setSelectedID(issue.id)} style={{
+                  onClick={(event) => openDetails(issue.id, event.currentTarget)} style={{
                     left: `clamp(0px, ${position.left}%, calc(100% - 3px))`, width: `max(3px, ${position.width}%)`,
                     background, color: theme.colors.getContrastText(background), opacity: stale ? 0.55 : 0.9,
                     borderRight: issue.resolved ? 'none' : `3px dashed ${theme.colors.background.primary}`,
@@ -373,7 +390,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
         rollup={rollups.get(selected.id)} warning={tree.nodes.get(selected.id)?.warning} stale={clock - selected.observed > staleMs}
         format={format} duration={duration(selected)} metadataFields={options.metadataFields} urlField={options.issueUrlField}
          baseUrl={sourceCount === 1 ? replaceVariables(options.jiraBaseUrl ?? '') : ''} fallbackBlocked={sourceCount > 1 && !!options.jiraBaseUrl?.trim()} styles={styles}
-        onClose={() => setSelectedID(undefined)}
+        onClose={closeDetails} onDismiss={restoreDetailsFocus}
         onFocus={() => { setRoot(selected.key); setRootSource(selected.source); setSearch(''); setProjects([]); }} />}
     </section>
   );

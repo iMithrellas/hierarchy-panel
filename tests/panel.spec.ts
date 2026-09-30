@@ -14,6 +14,21 @@ async function configurePanel(page: Page, options: Record<string, unknown>, over
   });
 }
 
+async function mockTickets(page: Page, keys: () => string[], beforeResponse: () => Promise<void> = async () => {}) {
+  const now = Date.now();
+  await page.route('**/api/ds/query*', async (route) => {
+    await beforeResponse();
+    const tickets = keys();
+    await route.fulfill({ json: { results: { A: { status: 200, frames: [{
+      schema: { refId: 'A', fields: [
+        { name: 'issue_key', type: 'string' }, { name: 'summary', type: 'string' },
+        { name: 'created_at', type: 'time' }, { name: 'sync_ts', type: 'time' }, { name: 'is_resolved', type: 'boolean' },
+      ] },
+      data: { values: [tickets, tickets.map((key) => `Matching ticket ${key}`), tickets.map(() => now - 86400000), tickets.map(() => now), tickets.map(() => false)] },
+    }] } } } });
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development?kiosk');
   await expect(page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true })).toBeVisible();
@@ -163,6 +178,94 @@ test('supports depth expansion, completed-branch collapse, and search navigation
   await page.getByRole('button', { name: 'Next search match' }).click();
   await expect(matchCounter).toContainText('2/12');
   await expect(page.getByRole('complementary')).toContainText('Scale subtask 12.24');
+});
+
+test('moves keyboard focus into details and restores the latest trigger or virtualized viewport', async ({ page }) => {
+  const trigger = page.getByRole('button', { name: 'Details for PM-100', exact: true });
+  const close = page.getByRole('button', { name: 'Close ticket details' });
+  await trigger.focus();
+  await trigger.press('Enter');
+  await expect(close).toBeFocused();
+  await close.press('Escape');
+  await expect(page.getByRole('complementary')).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.press('Enter');
+  await close.click();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  const nextRow = page.getByTestId('jira-row').nth(1);
+  const nextKey = await nextRow.getAttribute('data-issue-key');
+  const nextTrigger = nextRow.getByRole('gridcell').first().getByRole('button').last();
+  await nextTrigger.click();
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', `Ticket details ${nextKey}`);
+  await expect(close).toBeFocused();
+  await close.click();
+  await expect(nextTrigger).toBeFocused();
+  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
+  await page.getByRole('button', { name: 'Expand all', exact: true }).click();
+  const scaleTrigger = page.getByRole('button', { name: 'Details for PM-300', exact: true });
+  await scaleTrigger.focus();
+  await scaleTrigger.press('Enter');
+  await expect(close).toBeFocused();
+  const viewport = page.getByTestId('jira-viewport');
+  await viewport.evaluate((element) => { element.scrollTop = 3000; });
+  await expect(scaleTrigger).toHaveCount(0);
+  await close.press('Escape');
+  await expect(viewport).toBeFocused();
+});
+
+test('restores keyboard focus after focusing a subtree', async ({ page }) => {
+  const row = page.getByTestId('jira-row').filter({ hasText: 'OPS-900003' });
+  const trigger = row.getByRole('gridcell').first().getByRole('button').last();
+  await trigger.focus();
+  await trigger.press('Enter');
+  const focusSubtree = page.getByRole('button', { name: 'Focus subtree', exact: true });
+  await page.getByRole('button', { name: 'Close ticket details' }).press('Tab');
+  await expect(focusSubtree).toBeFocused();
+  await focusSubtree.press('Enter');
+  await expect(page.getByRole('complementary')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Parent ticket', exact: true })).toHaveValue('OPS-900003');
+  await expect(trigger).toBeFocused();
+});
+
+test('restores focus when a refreshed query removes details without stealing outside focus', async ({ page }) => {
+  await configurePanel(page, { rootKey: '' });
+  let keys = ['OPS-1', 'OPS-2'];
+  let holdRefresh = false;
+  let releaseResponse: (() => void) | undefined;
+  await mockTickets(page, () => keys, async () => {
+    if (holdRefresh) { await new Promise<void>((resolve) => { releaseResponse = resolve; }); }
+  });
+  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
+  await expect(page.getByTestId('issue-count')).toContainText('2 tickets');
+  const close = page.getByRole('button', { name: 'Close ticket details' });
+  const refreshWithFocus = async (focus: ReturnType<Page['getByRole']>) => {
+    holdRefresh = true;
+    releaseResponse = undefined;
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect.poll(() => Boolean(releaseResponse)).toBe(true);
+    await focus.focus();
+    releaseResponse!();
+    await expect(page.getByRole('complementary')).toHaveCount(0);
+    holdRefresh = false;
+  };
+  await page.getByRole('button', { name: 'Details for OPS-1', exact: true }).press('Enter');
+  await expect(close).toBeFocused();
+  keys = ['OPS-2'];
+  await refreshWithFocus(close);
+  await expect(page.getByTestId('jira-viewport')).toBeFocused();
+  await page.getByRole('button', { name: 'Details for OPS-2', exact: true }).press('Enter');
+  await expect(close).toBeFocused();
+  keys = ['OPS-3'];
+  const timeRange = page.getByRole('button', { name: /^Time range selected:/ });
+  await refreshWithFocus(timeRange);
+  await expect(timeRange).toBeFocused();
+  await page.getByRole('button', { name: 'Details for OPS-3', exact: true }).press('Enter');
+  await expect(close).toBeFocused();
+  keys = ['OPS-4'];
+  const search = page.getByRole('textbox', { name: 'Search tickets' });
+  await refreshWithFocus(search);
+  await expect(search).toBeFocused();
 });
 
 test('filters projects across roots without dropping ancestor context and surfaces orphan data', async ({ page }) => {

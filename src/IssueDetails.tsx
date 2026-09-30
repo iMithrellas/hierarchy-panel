@@ -1,4 +1,5 @@
 import type { DataFrame } from '@grafana/data';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { selectMetadata } from './data';
 import { presentField, ticketLinks } from './presentation';
 import type { Issue, IssueFieldMapping, Rollup } from './types';
@@ -17,19 +18,32 @@ interface Props {
   baseUrl: string;
   fallbackBlocked?: boolean;
   onClose: () => void;
+  onDismiss: () => void;
   onFocus: () => void;
   styles: Record<'detail' | 'detailHeader' | 'stale' | 'relationships' | 'actions', string>;
 }
 
-export function IssueDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, fallbackBlocked, onClose, onFocus, styles }: Props) {
+export function IssueDetails({ issue, frame, fields, rollup, warning, stale, format, duration, metadataFields, urlField, baseUrl, fallbackBlocked, onClose, onDismiss, onFocus, styles }: Props) {
+  const details = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { closeButton.current?.focus(); }, [issue.id]);
+  useLayoutEffect(() => {
+    const element = details.current;
+    return () => {
+      if (!element?.contains(document.activeElement)) { return; }
+      queueMicrotask(() => {
+        if (document.activeElement === document.body || element.contains(document.activeElement)) { onDismiss(); }
+      });
+    };
+  }, [onDismiss]);
   const links = ticketLinks(frame, issue, { keyField: fields.key, urlField, baseUrl, fallbackBlocked });
   const metadata = Object.keys(selectMetadata(issue, metadataFields)).sort().map((name) => ({ name, ...presentField(frame, issue, name) }));
   const attributes = [
     ['status', 'Status', 'Unknown'], ['type', 'Type', 'Unknown'], ['project', 'Project', ''],
     ['parent', 'Parent', 'None'], ['assignee', 'Assignee', 'Unassigned'], ['priority', 'Priority', 'Not set'],
   ] as const;
-  return <aside className={styles.detail} aria-label={`Ticket details ${issue.key}`}>
-    <div className={styles.detailHeader}><strong>{issue.key}</strong><button type="button" aria-label="Close ticket details" onClick={onClose}>Close</button></div>
+  return <aside ref={details} className={styles.detail} aria-label={`Ticket details ${issue.key}`}>
+    <div className={styles.detailHeader}><strong>{issue.key}</strong><button ref={closeButton} type="button" aria-label="Close ticket details" onClick={onClose}>Close</button></div>
     <h3>{presentField(frame, issue, fields.summary).text || '(no summary)'}</h3>
     <dl>
       {attributes.map(([mapping, label, fallback]) => {
