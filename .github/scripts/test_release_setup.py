@@ -19,6 +19,12 @@ class ReleaseSetupTest(unittest.TestCase):
         self.assertEqual(signer["version"], version)
         self.assertIn("sign-plugin", signer["bin"])
 
+    def test_release_regressions_run_in_ci_and_release(self):
+        for name in ("ci.yml", "release.yml"):
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text()
+                self.assertIn("python3 -m unittest discover -s .github/scripts -v", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
