@@ -3,7 +3,7 @@
 A standalone Grafana panel for exploring **actual Jira parent trees alongside
 observed ticket lifetimes**. Plugin ID: `imithrellas-jira-panel`. Built and tested against
 Grafana **13.0.1**, using public plugin APIs, React 18 and TypeScript. The repository's
-older root-level Grafana 11 demo is not the plugin development environment.
+development stack is isolated from other Grafana instances.
 
 ## Features
 
@@ -340,9 +340,12 @@ structured link cells as JSON; JSON export preserves the original text values.
 
 ## Validation
 
+Release-helper tests require Python 3.9+.
+
 ```sh
 npm run build
 npm test
+python3 -m unittest discover -s .github/scripts -v
 npx playwright install chromium
 npm run test:e2e
 ```
@@ -385,7 +388,8 @@ and the same URL with `.sha1` appended when submitting to Grafana. After Grafana
 approves signing, configure the `GRAFANA_ACCESS_POLICY_TOKEN` repository secret
 and rerun the workflow for the same tag. The run signs the plugin, requires the
 archive to contain a PGP clear-signed `MANIFEST.txt` with a complete signature
-block, and validates the archive. The signed ZIP and SHA1 replace the existing
+block, and strictly verifies its public Grafana signature and signed file contents
+before uploading. The signed ZIP and SHA1 replace the existing
 assets while the GitHub release remains a prerelease and not-latest. Before
 promotion, the workflow anonymously downloads both public assets and verifies
 they byte-match the signed local build and checksum. Only then does a separate
@@ -394,8 +398,8 @@ become stable/latest. Every run checks the archived plugin version against the
 tag. Before packaging, an unsigned run checks the tag's existing GitHub release
 using the workflow token and refuses to proceed if a published stable release
 already exists; only a definitive 404 is treated as a first submission. The
-workflow generates a GitHub build provenance attestation for each
-archive. The package action is referenced by
+workflow serializes runs for the same tag and generates a GitHub build provenance
+attestation for each archive. The package action is referenced by
 immutable commit; this avoids the build-plugin wrapper's nested mutable
 `package-plugin@main` reference. The workflow runs an additional explicit
 version-pinned Grafana validator check on the archive. The upstream packaging
@@ -431,7 +435,7 @@ times mixed across tickets. Freshness is shown per ticket; no completeness claim
 is inferred from the newest timestamp. Missing or invalid rows and known cap
 truncation are explicitly reported, but unseen data cannot be reconstructed.
 
-The untracked `references/core-traces-panel/` and `references/grafana-gantt-panel/`
-inspired the layout and interactions. Their source was not copied. The panel does
+The `core-traces-panel` and `grafana-gantt-panel` projects inspired the layout and
+interactions. Their source was not copied. The panel does
 not import Grafana-internal TraceView modules, encode Jira as spans, or require a
 trace backend.

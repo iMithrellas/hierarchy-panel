@@ -15,8 +15,8 @@ Restart policies are disabled.
 
 Run from the repository root after the main build has produced `dist/plugin.json`
 and the plugin bundle. These commands are intentionally explicit about the Compose
-file, project name, and empty environment file. Do not combine with the repository
-root Compose file. Do not source the repository `.env`.
+file, project name, and empty environment file. Do not load repository environment
+files or combine with other Compose projects.
 
 ```sh
 docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml config
@@ -70,7 +70,7 @@ docker compose --env-file /dev/null -p jira-panel-dev -f docker-compose.dev.yml 
 
 For a clean fixture reset, append `--volumes` to that command. This deletes only
 this project's development volumes, including Grafana's local state. Then start
-and seed again. Nothing in this directory starts or restarts the repository stack.
+and seed again. Other Compose projects are unaffected.
 
 ## Fixtures
 
@@ -105,8 +105,7 @@ other trees. UI edits are temporary; persist intended changes in the JSON file.
 
 ## Query And Schema
 
-The dashboard is classic schema (`panels[]`, `schemaVersion: 39`), not the v2
-`elements` format used by the repository's other dashboards. Its single panel is
+The dashboard uses classic schema (`panels[]`, `schemaVersion: 39`). Its single panel is
 ID 1, type `imithrellas-jira-panel`, datasource UID `jira-dev-logs`. Options match the
 panel contract: `rootKey=PM-100`, `initialDepth=2`, `staleHours=24`,
 `jiraBaseUrl=https://jira.example.invalid`, `maxIssues=10000`, `rowHeight=36`,
