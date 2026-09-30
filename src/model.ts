@@ -74,7 +74,7 @@ function rootIDs(tree: ReturnType<typeof buildTree>, rootKey: string, rootSource
 
 export function expansionForDepth(tree: ReturnType<typeof buildTree>, rootKey: string, depth: number, rootSource?: string) {
   const expansion = new Map<string, boolean>();
-  const stack = rootIDs(tree, rootKey, rootSource).reverse().map((id) => ({ id, depth: 0 }));
+  const stack = [...rootIDs(tree, rootKey, rootSource)].reverse().map((id) => ({ id, depth: 0 }));
   while (stack.length) {
     const entry = stack.pop()!;
     const node = tree.nodes.get(entry.id)!;

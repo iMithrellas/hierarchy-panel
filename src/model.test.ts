@@ -227,6 +227,21 @@ describe('real parent hierarchy', () => {
     expect(select('missing').rows).toEqual([]);
   });
 
+  it('preserves root, display, navigation and export order across depth changes', () => {
+    const tree = buildTree(issues([record('PM-2'), record('OPS-2', 'PM-2'), record('PM-1'), record('OPS-1', 'PM-1')]));
+    const roots = [...tree.roots];
+    const baseline = selectRows(tree, '', '', [], new Map(), 10);
+    for (const depth of [0, 1, 2, 1, 0, 10]) {
+      const expansion = expansionForDepth(tree, '', depth);
+      expect(tree.roots).toEqual(roots);
+      const selected = selectRows(tree, '', '', [], expansion, 10);
+      expect(selected.rows.filter(({ depth }) => depth === 0).map(({ node }) => node.issue.id)).toEqual(roots);
+      expect(selected.matchingIds).toEqual(baseline.matchingIds);
+      expect(exportRecords(selected.exportRows, new Map())).toEqual(exportRecords(baseline.exportRows, new Map()));
+    }
+    expect(selectRows(tree, '', '', [], new Map(), 10).rows).toEqual(baseline.rows);
+  });
+
   it('search and project filters retain ancestors and automatically expose matches', () => {
     const result = select('PM-1', 'REL-1', ['REL'], 0);
     expect(result.matchingCount).toBe(1);
