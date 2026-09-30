@@ -1,3 +1,4 @@
+import type { DataQueryError } from '@grafana/data';
 import { describe, expect, it } from 'vitest';
 import { getQueryErrors, getQueryErrorEmptyMessage, getQueryFailureAlertMessages, isQueryFailure } from './queryErrors';
 
@@ -48,5 +49,21 @@ describe('getQueryErrors', () => {
       'Query failed (B): Timed out.',
       'Displayed rows may be partial or stale. Exports reflect the data currently shown.',
     ]);
+  });
+
+  it.each([
+    [{ refId: 'A', status: 500, data: { message: 'Datasource unavailable' } }, 'Query failed (A): Datasource unavailable.'],
+    [{ message: ' Primary ', data: { message: 'Nested' }, statusText: 'Status' }, 'Query failed: Primary.'],
+    [{ message: ' ', data: { message: ' Nested ' }, statusText: 'Status' }, 'Query failed: Nested.'],
+    [{ message: '', data: { message: '\t' }, statusText: ' Bad Gateway ' }, 'Query failed: Bad Gateway.'],
+    [{ status: 500 }, 'Query failed: Status 500.'],
+    [{}, 'Query failed: No error message provided.'],
+    [{ message: ' \n', data: { message: '' }, statusText: '\t' }, 'Query failed: No error message provided.'],
+    [{ message: 123, data: { message: {} }, statusText: false, status: NaN }, 'Query failed: No error message provided.'],
+    [{ message: null, data: null, status: '500' }, 'Query failed: No error message provided.'],
+  ])('resolves useful error details without undefined: %j', (error, expected) => {
+    const messages = getQueryFailureAlertMessages([error as DataQueryError], false);
+    expect(messages[0]).toBe(expected);
+    expect(messages.join(' ')).not.toContain('undefined');
   });
 });

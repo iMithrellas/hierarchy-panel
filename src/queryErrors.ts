@@ -1,6 +1,5 @@
 import type { DataQueryError } from '@grafana/data';
 
-/** Normalize Grafana's modern error list, falling back to its legacy field. */
 export function getQueryErrors(errors?: DataQueryError[], error?: DataQueryError): DataQueryError[] {
   return errors?.length ? errors : error ? [error] : [];
 }
@@ -16,10 +15,15 @@ export function getQueryErrorEmptyMessage(hasIssues: boolean, hasErrorMessage: b
     : `${failure} Check the query and datasource. Exports reflect the data currently shown.`;
 }
 
-/** Content for the alert shown whenever a query fails, including data.state-only failures. */
 export function getQueryFailureAlertMessages(errors: DataQueryError[], hasRows: boolean): string[] {
   const messages = errors.length
-    ? errors.map((error) => `Query failed${error.refId ? ` (${error.refId})` : ''}: ${error.message}.`)
+    ? errors.map((error) => {
+      const message = [error.message, error.data?.message, error.statusText]
+        .find((value) => typeof value === 'string' && value.trim())?.trim();
+      const detail = message || (typeof error.status === 'number' && Number.isFinite(error.status)
+        ? `Status ${error.status}` : 'No error message provided');
+      return `Query failed${error.refId ? ` (${error.refId})` : ''}: ${detail}.`;
+    })
     : ['Query failed without providing an error message.'];
   messages.push(hasRows
     ? 'Displayed rows may be partial or stale. Exports reflect the data currently shown.'
