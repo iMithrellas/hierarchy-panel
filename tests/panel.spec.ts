@@ -180,6 +180,31 @@ test('supports depth expansion, completed-branch collapse, and search navigation
   await expect(page.getByRole('complementary')).toContainText('Scale subtask 12.24');
 });
 
+test('contains short narrow panels and scrolls chrome, warnings, tickets and footer into view', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('');
+  await expect(page.getByRole('status')).toContainText('missing or cyclic');
+  const panel = page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true });
+  await panel.evaluate((element) => { element.style.width = '390px'; element.style.height = '300px'; });
+  const scroller = page.getByTestId('jira-panel-scroll');
+  expect(await scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const panelBox = (await panel.boundingBox())!;
+  const scrollBox = (await scroller.boundingBox())!;
+  expect(scrollBox.y + scrollBox.height).toBeLessThanOrEqual(panelBox.y + 300);
+  for (const control of [page.getByRole('textbox', { name: 'Search tickets' }), page.getByRole('button', { name: 'Fit tickets', exact: true }), page.getByRole('status'), page.getByTestId('jira-viewport'), page.getByText('Actual Jira parents / observed lifetimes, not planned schedules', { exact: true })]) {
+    await control.scrollIntoViewIfNeeded();
+    await expect(control).toBeInViewport();
+  }
+  const viewport = page.getByTestId('jira-viewport');
+  expect(await viewport.evaluate((element) => element.clientHeight)).toBeGreaterThanOrEqual(60);
+  expect(await page.getByTestId('jira-row').count()).toBeLessThan(70);
+  await page.getByRole('button', { name: 'Fit tickets', exact: true }).click();
+  await viewport.scrollIntoViewIfNeeded();
+  await page.getByTestId('jira-row').first().getByRole('button').nth(1).click();
+  const details = page.getByRole('complementary');
+  await expect(details).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Close ticket details' })).toBeFocused();
+});
+
 test('moves keyboard focus into details and restores the latest trigger or virtualized viewport', async ({ page }) => {
   const trigger = page.getByRole('button', { name: 'Details for PM-100', exact: true });
   const close = page.getByRole('button', { name: 'Close ticket details' });

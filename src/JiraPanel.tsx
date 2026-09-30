@@ -239,6 +239,8 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     <section className={styles.panel} style={{ width, height }} aria-label="Jira hierarchy timeline" onKeyDown={(event) => {
       if (event.key === 'Escape' && selected) { event.preventDefault(); event.stopPropagation(); closeDetails(); }
     }}>
+      <div className={styles.panelScroll} data-testid="jira-panel-scroll">
+      <div className={styles.panelContent}>
       <div className={styles.toolbar}>
         <label className={styles.rootLabel}>Parent
           <input aria-label="Parent ticket" placeholder="All ticket trees" value={root} onChange={(event) => { setRoot(event.target.value); setRootSource(undefined); }} />
@@ -386,6 +388,8 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
         <span>Actual Jira parents / observed lifetimes, not planned schedules</span>
         <span>{selection.filtering ? 'Matching tickets + ancestor context' : 'Timeline fits fetched tickets; zoom is local'}</span>
       </div>
+      </div>
+      </div>
       {selected && <IssueDetails issue={selected} frame={data.series[selected.origin.frameIndex]} fields={parsed.fieldMappings}
         rollup={rollups.get(selected.id)} warning={tree.nodes.get(selected.id)?.warning} stale={clock - selected.observed > staleMs}
         format={format} duration={duration(selected)} metadataFields={options.metadataFields} urlField={options.issueUrlField}
@@ -399,7 +403,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
 function getStyles(theme: GrafanaTheme2) {
   const border = theme.colors.border.weak;
   return {
-    panel: css({ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, fontSize: 12, color: theme.colors.text.primary,
+    panel: css({ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, overflow: 'hidden', fontSize: 12, color: theme.colors.text.primary,
       '& button, & input, & summary': { font: 'inherit' },
       '& button, & summary': { cursor: 'pointer' },
       '& button:disabled': { cursor: 'default', opacity: 0.4 },
@@ -407,6 +411,8 @@ function getStyles(theme: GrafanaTheme2) {
       '& button': { border: `1px solid ${border}`, borderRadius: 4, padding: '4px 8px', color: theme.colors.text.primary, background: theme.colors.background.secondary },
       '& input:not([type=checkbox]), & select': { border: `1px solid ${border}`, background: theme.colors.background.primary, color: theme.colors.text.primary, borderRadius: 4, padding: '6px 8px', minWidth: 0 },
     }),
+    panelScroll: css({ height: '100%', minHeight: 0, overflow: 'auto', overscrollBehavior: 'contain' }),
+    panelContent: css({ display: 'flex', flexDirection: 'column', height: '100%' }),
     toolbar: css({ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 8px 4px', alignItems: 'center', flexShrink: 0 }),
     rootLabel: css({ display: 'flex', alignItems: 'center', gap: 8, '& input': { width: 130 } }),
     searchField: css({ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', flexShrink: 0, '& select': { width: 112, height: 28, boxSizing: 'border-box' } }),
@@ -418,7 +424,7 @@ function getStyles(theme: GrafanaTheme2) {
     actions: css({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }),
     depthControl: css({ display: 'inline-flex', alignItems: 'center', gap: 4, color: theme.colors.text.secondary, '& input': { width: 46, textAlign: 'center' } }),
     count: css({ marginLeft: 8, color: theme.colors.text.secondary, fontVariantNumeric: 'tabular-nums' }),
-    status: css({ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 6, padding: '6px 10px', fontSize: 11, color: theme.colors.text.secondary, borderTop: `1px solid ${border}` }),
+    status: css({ display: 'flex', flexWrap: 'wrap', flexShrink: 0, justifyContent: 'space-between', gap: 6, padding: '6px 10px', fontSize: 11, color: theme.colors.text.secondary, borderTop: `1px solid ${border}` }),
     legend: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, '& span': { display: 'inline-flex', alignItems: 'center', gap: 4 }, '& i': { width: 7, height: 7, borderRadius: 2 } }),
     openLegend: css({ fontStyle: 'italic' }),
     relationshipLegend: css({ '& i': { width: 24, height: 0, borderTop: `2px solid ${theme.colors.text.secondary}`, position: 'relative', '&::after': { content: '""', position: 'absolute', right: -1, top: -4, borderTop: '3px solid transparent', borderBottom: '3px solid transparent', borderLeft: `5px solid ${theme.colors.text.secondary}` } } }),
@@ -428,7 +434,7 @@ function getStyles(theme: GrafanaTheme2) {
     axis: css({ display: 'flex', height: 36, alignItems: 'center', color: theme.colors.text.secondary, fontSize: 10 }),
     axisTitle: css({ flexShrink: 0, padding: '0 12px', letterSpacing: '0.08em' }),
     ticks: css({ position: 'relative', height: '100%', '& span': { position: 'absolute', top: 10, whiteSpace: 'nowrap', padding: '0 4px' } }),
-    viewport: css({ flex: '1 1 auto', minHeight: 60, overflow: 'auto', overscrollBehavior: 'contain', scrollbarGutter: 'stable' }),
+    viewport: css({ flex: '1 0 60px', minHeight: 60, overflow: 'auto', overscrollBehavior: 'contain', scrollbarGutter: 'stable' }),
     links: css({ position: 'absolute', top: 0, left: 0, zIndex: 2, overflow: 'visible', pointerEvents: 'none' }),
     linkPath: css({ fill: 'none', strokeWidth: 2, opacity: 0.95, pointerEvents: 'none' }),
     relationshipArrow: css({ cursor: 'help' }),
