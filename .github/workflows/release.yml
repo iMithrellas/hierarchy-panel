@@ -64,6 +64,11 @@ jobs:
         run: npx --yes @grafana/plugin-validator@0.49.5 "$PLUGIN_ARCHIVE"
         env:
           PLUGIN_ARCHIVE: ${{ steps.package.outputs.archive }}
+      - name: Require valid public Grafana signature
+        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        run: npx --yes @grafana/plugin-validator@0.49.5 -analyzer signature -strict "$PLUGIN_ARCHIVE"
+        env:
+          PLUGIN_ARCHIVE: ${{ steps.package.outputs.archive }}
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: ${{ steps.package.outputs.archive }}

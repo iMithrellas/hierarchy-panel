@@ -19,6 +19,19 @@ class ReleaseSetupTest(unittest.TestCase):
         self.assertEqual(signer["version"], version)
         self.assertIn("sign-plugin", signer["bin"])
 
+    def test_signed_release_requires_strict_signature_before_upload(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        step = re.search(
+            r"      - name: Require valid public Grafana signature\n(.*?)(?=      -)",
+            workflow,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(step)
+        self.assertIn("steps.signing.outputs.enabled == 'true'", step.group(1))
+        self.assertIn('-analyzer signature -strict "$PLUGIN_ARCHIVE"', step.group(1))
+        self.assertLess(step.start(), workflow.index("softprops/action-gh-release"))
+        self.assertLess(step.start(), workflow.index("Promote verified signed release to stable"))
+
     def test_same_tag_release_runs_are_serialized(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn("concurrency:\n  group: release-${{ github.ref }}\n  cancel-in-progress: false", workflow)
