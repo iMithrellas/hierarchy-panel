@@ -6,6 +6,7 @@
   "description": "Virtualized Jira parent hierarchy and observed lifetime timeline for Grafana",
   "scripts": {
     "build": "tsc --noEmit && webpack -c ./.config/webpack/webpack.config.ts --env production",
+    "sign": "sign-plugin",
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -21,6 +22,7 @@
     "@emotion/css": "11.13.5",
     "@grafana/data": "13.0.1",
     "@grafana/runtime": "13.0.1",
+    "@grafana/sign-plugin": "3.3.3",
     "@grafana/ui": "13.0.1",
     "@playwright/test": "1.63.0",
     "@types/node": "22.19.15",
