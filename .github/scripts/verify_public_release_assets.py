@@ -12,8 +12,12 @@ from urllib.request import Request, urlopen
 
 def fetch(url: str) -> bytes:
     request = Request(url, headers={"User-Agent": "jira-panel-release-verifier"})
-    with urlopen(request, timeout=30) as response:
-        return response.read()
+    try:
+        with urlopen(request, timeout=30) as response:
+            return response.read()
+    except HTTPError as error:
+        with error:
+            raise
 
 
 def verify(repository: str, tag: str, archive_path: str, checksum_path: str) -> int:

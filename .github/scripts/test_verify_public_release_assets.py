@@ -1,13 +1,36 @@
 import hashlib
+import io
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).parent))
-from verify_public_release_assets import verify
+from verify_public_release_assets import fetch, verify
+
+
+class FetchTest(unittest.TestCase):
+    def test_closes_http_error_bodies_and_preserves_exception(self):
+        for code in (404, 503):
+            with self.subTest(code=code):
+                body = io.BytesIO(b"Failure")
+                error = HTTPError("https://public/archive", code, "Failure", {}, body)
+                with patch("verify_public_release_assets.urlopen", side_effect=error):
+                    with self.assertRaises(HTTPError) as raised:
+                        fetch("https://public/archive")
+                self.assertIs(raised.exception, error)
+                self.assertTrue(body.closed)
+
+    def test_closes_http_errors_without_response_body(self):
+        error = HTTPError("https://public/archive", 503, "Failure", {}, None)
+        with patch("verify_public_release_assets.urlopen", side_effect=error):
+            with self.assertRaises(HTTPError) as raised:
+                fetch("https://public/archive")
+        self.assertIs(raised.exception, error)
+        self.assertTrue(error.closed)
 
 
 class VerifyPublicReleaseAssetsTest(unittest.TestCase):

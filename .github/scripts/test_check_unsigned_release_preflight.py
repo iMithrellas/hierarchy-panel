@@ -22,10 +22,12 @@ def response(payload):
 
 class UnsignedReleasePreflightTest(unittest.TestCase):
     def test_allows_missing_release_404_as_initial_submission(self):
-        error = HTTPError("https://api.github.test", 404, "Not Found", {}, None)
+        body = io.BytesIO(b"Not Found")
+        error = HTTPError("https://api.github.test", 404, "Not Found", {}, body)
         with patch("check_unsigned_release_preflight.urlopen", side_effect=error) as request:
             self.assertEqual(check("acme/plugin", "v1.2.3", "secret"), "no existing published release")
             self.assertEqual(request.call_args.args[0].get_header("Authorization"), "Bearer secret")
+        self.assertTrue(body.closed)
 
     def test_allows_existing_prerelease(self):
         with patch("check_unsigned_release_preflight.urlopen", return_value=response({"draft": False, "prerelease": True})):
@@ -37,10 +39,24 @@ class UnsignedReleasePreflightTest(unittest.TestCase):
                 check("acme/plugin", "v1.2.3", "secret")
 
     def test_fails_closed_on_non_404_api_error(self):
-        error = HTTPError("https://api.github.test", 503, "Unavailable", {}, None)
+        body = io.BytesIO(b"Unavailable")
+        error = HTTPError("https://api.github.test", 503, "Unavailable", {}, body)
         with patch("check_unsigned_release_preflight.urlopen", side_effect=error):
             with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
                 check("acme/plugin", "v1.2.3", "secret")
+        self.assertTrue(body.closed)
+
+    def test_closes_http_errors_without_response_body(self):
+        for code in (404, 503):
+            with self.subTest(code=code):
+                error = HTTPError("https://api.github.test", code, "Failure", {}, None)
+                with patch("check_unsigned_release_preflight.urlopen", side_effect=error):
+                    if code == 404:
+                        self.assertEqual(check("acme/plugin", "v1.2.3", "secret"), "no existing published release")
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
+                            check("acme/plugin", "v1.2.3", "secret")
+                self.assertTrue(error.closed)
 
     def test_fails_closed_when_release_state_is_malformed(self):
         with patch("check_unsigned_release_preflight.urlopen", return_value=response({"draft": False})):

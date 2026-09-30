@@ -27,9 +27,10 @@ def check(repository: str, tag: str, token: str) -> str:
         with urlopen(request, timeout=30) as response:
             release = json.loads(response.read())
     except HTTPError as error:
-        if error.code == 404:
-            return "no existing published release"
-        raise RuntimeError(f"GitHub release preflight failed with HTTP {error.code}") from None
+        with error:
+            if error.code == 404:
+                return "no existing published release"
+            raise RuntimeError(f"GitHub release preflight failed with HTTP {error.code}") from None
     except URLError as error:
         raise RuntimeError("GitHub release preflight request failed") from None
 
