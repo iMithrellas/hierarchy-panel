@@ -242,6 +242,44 @@ describe('real parent hierarchy', () => {
     expect(selectRows(tree, '', '', [], new Map(), 10).rows).toEqual(baseline.rows);
   });
 
+  it('prunes overlapping case-insensitive roots while retaining disjoint roots and sources', () => {
+    const tree = buildTree(issues([
+      record('OPS-1'), record('ops-1', 'OPS-1'), record('CHILD', 'ops-1'),
+      record('Ops-1'), record('OTHER', 'Ops-1'),
+      record('OPS-1', '', { instance: 'different' }), record('SECOND', 'OPS-1', { instance: 'different' }),
+    ]));
+    const source = [...tree.nodes.values()].find(({ issue }) => issue.key === 'CHILD')!.issue.source;
+    for (const selectedSource of [undefined, source]) {
+      const expansion = expansionForDepth(tree, ' OPS-1 ', 10, selectedSource);
+      const selected = selectRows(tree, ' OPS-1 ', '', [], expansion, 0, selectedSource);
+      const ids = selected.rows.map(({ node }) => node.issue.id);
+      expect(ids).toHaveLength(selectedSource ? 5 : 7);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(selected.matchingIds).toEqual(ids);
+      expect(selected.scopedCount).toBe(ids.length);
+      expect(selected.matchingCount).toBe(ids.length);
+      expect(selected.exportRows.map(({ node }) => node.issue.id)).toEqual(ids);
+      expect(selected.issues.map(({ id }) => id)).toEqual(ids);
+      expect(exportRecords(selected.exportRows, new Map()).map(({ source, issue_key }) => JSON.stringify([source, issue_key]))).toEqual(ids);
+      expect(selected.rows.find(({ node }) => node.issue.key === 'CHILD')!.depth).toBe(2);
+    }
+    const overlapping = buildTree(issues([record('OPS-1'), record('ops-1', 'OPS-1'), record('CHILD', 'ops-1')]));
+    const expansion = expansionForDepth(overlapping, 'OPS-1', 1);
+    expect(selectRows(overlapping, 'OPS-1', '', [], expansion, 0).rows.map(({ node }) => node.issue.key)).toEqual(['OPS-1', 'ops-1']);
+    expect(selectRows(overlapping, 'OPS-1', '', [], new Map(), 10).scopedCount).toBe(3);
+  });
+
+  it('prunes matching ancestors iteratively on a 10,000-level case-distinct chain', () => {
+    const keys = Array.from({ length: 10000 }, (_, i) => [...'abcdefghijklmn'].map((letter, bit) => i & (1 << bit) ? letter.toUpperCase() : letter).join(''));
+    const tree = buildTree(issues(keys.map((key, i) => record(key, i ? keys[i - 1] : ''))));
+    const expansion = expansionForDepth(tree, keys[0], 1);
+    const selected = selectRows(tree, keys[0], '', [], expansion, 0);
+    expect(selected.scopedCount).toBe(10000);
+    expect(new Set(selected.matchingIds).size).toBe(10000);
+    expect(selected.rows.map(({ node }) => node.issue.key)).toEqual(keys.slice(0, 2));
+    expect(selected.exportRows.at(-1)?.depth).toBe(9999);
+  });
+
   it('search and project filters retain ancestors and automatically expose matches', () => {
     const result = select('PM-1', 'REL-1', ['REL'], 0);
     expect(result.matchingCount).toBe(1);

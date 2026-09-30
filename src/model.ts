@@ -67,9 +67,20 @@ export function computeRollups(tree: ReturnType<typeof buildTree>, now: number, 
 
 function rootIDs(tree: ReturnType<typeof buildTree>, rootKey: string, rootSource?: string) {
   const root = rootKey.trim().toLowerCase();
-  return root
-    ? [...tree.nodes.values()].filter((n) => n.issue.key.toLowerCase() === root && (!rootSource || n.issue.source === rootSource)).map((n) => n.issue.id)
-    : tree.roots;
+  if (!root) { return tree.roots; }
+  const candidates = [...tree.nodes.values()]
+    .filter((n) => n.issue.key.toLowerCase() === root && (!rootSource || n.issue.source === rootSource))
+    .map((n) => n.issue.id);
+  if (candidates.length < 2) { return candidates; }
+  const matching = new Set(candidates);
+  const selected = new Set<string>();
+  const stack = [...tree.roots];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (matching.has(id)) { selected.add(id); continue; }
+    for (const child of tree.nodes.get(id)!.children) { stack.push(child); }
+  }
+  return candidates.filter((id) => selected.has(id));
 }
 
 export function expansionForDepth(tree: ReturnType<typeof buildTree>, rootKey: string, depth: number, rootSource?: string) {
