@@ -31,7 +31,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const [selectedID, setSelectedID] = useState<string>();
   const [hoveredRelationship, setHoveredRelationship] = useState<string>();
   const [showRelationships, setShowRelationships] = useState(true);
-  const [matchCursor, setMatchCursor] = useState(0);
+  const [matchPosition, setMatchPosition] = useState<{ index: number; id?: string; filters?: string }>({ index: 0 });
   const [clock, setClock] = useState(Date.now());
   const [scroll, setScroll] = useState({ top: 0, left: 0, height: 400 });
   const viewport = useRef<HTMLDivElement>(null);
@@ -48,10 +48,15 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   const searchFieldOptions = useMemo(() => discoverSearchFields(parsed.issues, options.searchableFields, parsed.fieldMappings),
     [parsed.issues, options.searchableFields, parsed.fieldMappings]);
   const activeSearchField = searchFieldOptions.some(({ value }) => value === searchField) ? searchField : 'all';
+  const searchSchema = JSON.stringify(searchFieldOptions.map(({ value, field }) => [value, field]));
+  const searchFilters = JSON.stringify([root, rootSource, deferredSearch, projects, activeSearchField, searchSchema]);
   const tree = useMemo(() => buildTree(parsed.issues), [parsed.issues]);
   const rollups = useMemo(() => computeRollups(tree, clock, staleMs), [tree, clock, staleMs]);
   const selection = useMemo(() => selectRows(tree, root, deferredSearch, projects, expansion, initialDepth, rootSource, activeSearchField, searchFieldOptions),
     [tree, root, deferredSearch, projects, expansion, initialDepth, rootSource, activeSearchField, searchFieldOptions]);
+  const matchingIndex = matchPosition.id ? selection.matchingIds.indexOf(matchPosition.id) : -1;
+  const matchCursor = matchPosition.filters === searchFilters
+    ? matchingIndex >= 0 ? matchingIndex : Math.min(matchPosition.index, Math.max(0, selection.matchingIds.length - 1)) : 0;
   const availableProjects = useMemo(() => [...new Set(parsed.issues.map((issue) => issue.project))].filter(Boolean).sort(), [parsed.issues]);
   const sourceCount = useMemo(() => new Set(parsed.issues.map((issue) => issue.source)).size, [parsed.issues]);
   const fittedRange = useMemo(() => fitRange(selection.issues), [selection.issues]);
@@ -98,8 +103,12 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
   useEffect(() => {
     if (viewport.current) { viewport.current.scrollTop = 0; }
     setScroll(resetScrollTop);
-    setMatchCursor(0);
-  }, [root, rootSource, deferredSearch, projects, activeSearchField, searchFieldOptions]);
+  }, [root, rootSource, deferredSearch, projects, activeSearchField, searchSchema]);
+  useEffect(() => {
+    const id = selection.matchingIds[matchCursor];
+    setMatchPosition((previous) => previous.index === matchCursor && previous.id === id && previous.filters === searchFilters
+      ? previous : { index: matchCursor, id, filters: searchFilters });
+  }, [selection.matchingIds, matchCursor, searchFilters]);
   useEffect(() => {
     if (selectedID && !selected) { setSelectedID(undefined); }
   }, [selectedID, selected]);
@@ -216,7 +225,7 @@ export function JiraPanel({ data, options, width, height, timeZone, replaceVaria
     if (!selection.matchingIds.length) { return; }
     const next = (matchCursor + direction + selection.matchingIds.length) % selection.matchingIds.length;
     const id = selection.matchingIds[next];
-    setMatchCursor(next);
+    setMatchPosition({ index: next, id, filters: searchFilters });
     openDetails(id, trigger);
     const rowIndex = selection.rows.findIndex((row) => row.node.issue.id === id);
     if (rowIndex >= 0 && viewport.current) { viewport.current.scrollTop = rowIndex * rowHeight; }

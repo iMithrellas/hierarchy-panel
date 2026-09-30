@@ -29,6 +29,13 @@ async function mockTickets(page: Page, keys: () => string[], beforeResponse: () 
   });
 }
 
+async function refreshDashboard(page: Page) {
+  const response = page.waitForResponse((response) => response.url().includes('/api/ds/query') && response.ok());
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await (await response).finished();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development?kiosk');
   await expect(page.getByRole('region', { name: 'Jira hierarchy timeline', exact: true })).toBeVisible();
@@ -180,6 +187,31 @@ test('supports depth expansion, completed-branch collapse, and search navigation
   await expect(page.getByRole('complementary')).toContainText('Scale subtask 12.24');
 });
 
+test('preserves scroll and search position across equivalent query refreshes', async ({ page }) => {
+  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
+  await expect(page.getByTestId('issue-count')).toContainText('62 tickets');
+  await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('PM-300');
+  await page.getByRole('button', { name: 'Expand all', exact: true }).click();
+  const viewport = page.getByTestId('jira-viewport');
+  await viewport.evaluate((element) => { element.scrollTop = 3000; });
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(3000);
+  await refreshDashboard(page);
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(3000);
+  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Scale subtask');
+  const navigation = page.getByRole('region', { name: 'Search result navigation' });
+  await expect(navigation).toContainText('1/3456');
+  await page.getByRole('button', { name: 'Next search match' }).click();
+  await expect(navigation).toContainText('2/3456');
+  await page.getByRole('button', { name: 'Close ticket details' }).click();
+  await viewport.evaluate((element) => { element.scrollTop = 3000; });
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('2/3456');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(3000);
+  await page.getByRole('combobox', { name: 'Search field' }).selectOption('key');
+  await expect(navigation).toContainText('0 matches');
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0);
+});
+
 test('contains short narrow panels and scrolls chrome, warnings, tickets and footer into view', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Parent ticket', exact: true }).fill('');
   await expect(page.getByRole('status')).toContainText('missing or cyclic');
@@ -291,6 +323,45 @@ test('restores focus when a refreshed query removes details without stealing out
   const search = page.getByRole('textbox', { name: 'Search tickets' });
   await refreshWithFocus(search);
   await expect(search).toBeFocused();
+});
+
+test('reconciles search position by identity and bounds it as refreshed matches change', async ({ page }) => {
+  await configurePanel(page, { rootKey: '' });
+  let keys = ['OPS-1', 'OPS-2', 'OPS-3'];
+  await mockTickets(page, () => keys);
+  await page.goto('/d/jira-hierarchy-dev/jira-hierarchy-development');
+  await expect(page.getByTestId('issue-count')).toContainText('3 tickets');
+  await page.getByRole('textbox', { name: 'Search tickets' }).fill('Matching');
+  const navigation = page.getByRole('region', { name: 'Search result navigation' });
+  const next = page.getByRole('button', { name: 'Next search match' });
+  const close = page.getByRole('button', { name: 'Close ticket details' });
+  await expect(navigation).toContainText('1/3');
+  await next.click();
+  await close.click();
+  await next.click();
+  await expect(navigation).toContainText('3/3');
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Ticket details OPS-3');
+  await close.click();
+  keys = ['OPS-0', 'OPS-1', 'OPS-2', 'OPS-3'];
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('4/4');
+  keys = ['OPS-4'];
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('1/1');
+  keys = ['OPS-5', 'OPS-6'];
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('1/2');
+  await next.click();
+  await expect(navigation).toContainText('2/2');
+  await expect(page.getByRole('complementary')).toHaveAttribute('aria-label', 'Ticket details OPS-6');
+  await close.click();
+  keys = [];
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('0 matches');
+  await expect(next).toBeDisabled();
+  keys = ['OPS-7'];
+  await refreshDashboard(page);
+  await expect(navigation).toContainText('1/1');
 });
 
 test('filters projects across roots without dropping ancestor context and surfaces orphan data', async ({ page }) => {
