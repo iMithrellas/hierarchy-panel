@@ -16,6 +16,7 @@ const structuralFields = [
 const structuralMappings = ['parent', 'links', 'created', 'observed', 'resolved', 'isResolved', 'category'] as const;
 const textMappings = ['parent', 'project', 'summary', 'type', 'status', 'category', 'assignee', 'priority'] as const;
 const diagnosticLimit = 20;
+const issueKeyCollator = new Intl.Collator(undefined, { numeric: true });
 
 export function fieldNames(configured = ''): string[] {
   return [...new Set(configured.split(',').map((field) => field.trim()).filter(Boolean))];
@@ -199,6 +200,6 @@ export function readIssues(frames: DataFrame[], maxIssues: number, options: Part
       fields: row, searchValues: searchableValues(row, fields, excluded),
     });
   }
-  issues.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }) || a.source.localeCompare(b.source));
+  issues.sort((a, b) => issueKeyCollator.compare(a.key, b.key) || a.source.localeCompare(b.source));
   return { issues: issues.slice(0, maxIssues), invalid, diagnostics, truncated: issues.length > maxIssues, rawRows, fieldMappings: fields };
 }

@@ -105,6 +105,17 @@ describe('validation diagnostics', () => {
   });
 });
 
+describe('numeric issue ordering', () => {
+  it('sorts numeric keys naturally with source as the tie breaker before truncating', () => {
+    const rows = [row('OPS-10'), row('OPS-2', { instance: 'z' }), row('OPS-1'), row('OPS-2', { instance: 'a' })];
+    const result = readIssues([table(rows)], 3);
+    expect(result.issues.map(({ key, source }) => [key, source])).toEqual([
+      ['OPS-1', '["","",""]'], ['OPS-2', '["","a",""]'], ['OPS-2', '["","z",""]'],
+    ]);
+    expect(result.truncated).toBe(true);
+  });
+});
+
 describe('custom metadata', () => {
   it('preserves sparse scalar values and arrays, including names that collide with export columns', () => {
     const result = readIssues([table([
