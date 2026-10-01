@@ -1,6 +1,6 @@
 {
   "name": "imithrellas-hierarchy-panel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Datasource-agnostic record hierarchy and observed lifetime timeline for Grafana",
