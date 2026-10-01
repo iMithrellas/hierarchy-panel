@@ -42,6 +42,29 @@ class ReleaseSetupTest(unittest.TestCase):
                 workflow = (ROOT / ".github/workflows" / name).read_text()
                 self.assertIn("python3 -m unittest discover -s .github/scripts -v", workflow)
 
+    def test_source_aware_validation_runs_before_upload_and_in_ci(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        validation = 'npx --yes @grafana/plugin-validator@0.49.5 -sourceCodeUri file://./ "$PLUGIN_ARCHIVE"'
+        self.assertIn(validation, workflow)
+        self.assertLess(workflow.index(validation), workflow.index("softprops/action-gh-release"))
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("npm run validate:release", ci)
+        script = (ROOT / ".github/scripts/validate_release.sh").read_text()
+        self.assertIn("@grafana/plugin-validator@0.49.5 -sourceCodeUri file://./", script)
+        self.assertNotIn("-analyzer", script)
+        self.assertNotIn("-exclude", script)
+
+    def test_build_uses_extended_grafana_configuration(self):
+        package = json.loads((ROOT / "package.json").read_text())
+        for command in ("build", "dev"):
+            self.assertIn("-c ./webpack.config.ts", package["scripts"][command])
+        extension = (ROOT / "webpack.config.ts").read_text()
+        self.assertIn("await grafanaConfig(env)", extension)
+        self.assertIn("./.config/webpack/webpack.config.ts", extension)
+        scaffold = (ROOT / ".config/webpack/webpack.config.ts").read_text()
+        for feature in ("BuildModeWebpackPlugin", "virtualPublicPath", "SubresourceIntegrityPlugin", "copyFilePatterns"):
+            self.assertIn(feature, scaffold)
+
 
 if __name__ == "__main__":
     unittest.main()

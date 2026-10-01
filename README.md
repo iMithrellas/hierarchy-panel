@@ -52,7 +52,7 @@ The build uses Grafana/React as external runtime modules, not bundled copies of
 these SDK dependencies. Do not remove the `react-data-grid` override unless the
 Grafana SDK releases a registry-resolvable dependency.
 
-Open [Hierarchy Timeline - Development](http://127.0.0.1:3300/d/hierarchy-timeline-dev), in
+Open **Hierarchy Timeline - Development** at `http://127.0.0.1:3300/d/hierarchy-timeline-dev`, in
 the **Operations** folder. Grafana is loopback-only on port 3300; VictoriaLogs is
 loopback-only on 19428. These services have separate storage and never load the
 repository `.env`, contact Jira, or connect to the existing Grafana instance.
@@ -438,6 +438,21 @@ GRAFANA_PLUGIN_RELEASE=true npm run build
 
 The resulting `dist/` contains the files packaged by the release workflow. Do not
 commit `dist/`, dependency directories, test results, or release archives.
+
+Run `npm run validate:release` to build a release ZIP and SHA1 in `release/` and
+validate both the archive and source with `@grafana/plugin-validator@0.49.5`.
+CI runs this check before tags are created; the packaging action also validates
+with the latest validator, followed by the pinned source-aware release check.
+Unsigned local builds can pass validation with an unsigned-plugin warning; they
+are not signed or eligible for automatic stable-release promotion.
+
+The frontend uses the Webpack build configuration from
+`@grafana/create-plugin@7.11.0`. Keep its generated Webpack, bundler and ESLint
+files under `.config/` unchanged; project-specific metadata/cache hashing lives
+in the root `webpack.config.ts`, following Grafana's
+[configuration extension guidance](https://grafana.com/developers/plugin-tools/how-to-guides/extend-configurations#extend-the-webpack-config).
+The `.config/.cprc.json` records the scaffold version, and `.swcrc` retains the
+automatic React JSX runtime used by the panel.
 
 The name and ID change does not grant community signing approval. Source and
 release URLs remain under `https://github.com/iMithrellas/jira-panel`; the GitHub
