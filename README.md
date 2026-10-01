@@ -52,6 +52,11 @@ The build uses Grafana/React as external runtime modules, not bundled copies of
 these SDK dependencies. Do not remove the `react-data-grid` override unless the
 Grafana SDK releases a registry-resolvable dependency.
 
+Keep the explicit `yaml` 2 development dependency: it satisfies Vite's optional
+peer used by Vitest and keeps lockfile generation compatible with CI's npm 10
+and local npm 12. Otherwise npm 12 omits that peer while npm 10 requires it for
+`npm ci` when the transitive YAML 1 dependency is present.
+
 Open **Hierarchy Timeline - Development** at `http://127.0.0.1:3300/d/hierarchy-timeline-dev`, in
 the **Operations** folder. Grafana is loopback-only on port 3300; VictoriaLogs is
 loopback-only on 19428. These services have separate storage and never load the
